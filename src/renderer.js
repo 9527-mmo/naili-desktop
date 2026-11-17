@@ -107,6 +107,8 @@ delaySlider.addEventListener('input',()=>{delayValue.textContent=delaySlider.val
 scaleSlider.addEventListener('change',()=>updateSetting({scale:Number(scaleSlider.value)}));
 delaySlider.addEventListener('change',()=>updateSetting({followDelay:Number(delaySlider.value)}));
 let walking=false,motionChanged=performance.now(),lastWalkStart=0;
+let roofState='away',roofRestStart=0,roofLastNap=0;
+window.naili?.onHomeState(value=>{if(!['away','returning','resting'].includes(value))return;if(roofState!==value){roofState=value;if(value==='resting')roofRestStart=performance.now();}});
 window.naili?.onMotion(value=>{if(walking!==value){walking=value;motionChanged=performance.now();}});
 const behavior=window.NailiBehavior.create();
 let lastManual=0;
@@ -215,6 +217,9 @@ function frame(now){
   else if(!walking&&timeline.name==='walk'&&now-motionChanged>500&&now-lastWalkStart>850){
    timeline.enter('idle',now,undefined,true);lastManual=Math.max(lastManual,now-2800);
   }
+ }
+ if(roofState==='resting'&&!walking&&!feedStage&&!state.drag&&!toiletEnd&&now-roofRestStart>7000&&now-roofLastNap>24000&&now-lastManual>9000&&timeline.name==='idle'){
+  roofLastNap=now;timeline.enter('sleep',now,5000,true);
  }
  ambient(now);draw(now);requestAnimationFrame(frame);
 }
