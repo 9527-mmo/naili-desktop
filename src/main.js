@@ -1,7 +1,7 @@
 const { app, BrowserWindow, screen, ipcMain } = require('electron');
 const fs=require('fs'),path=require('path');
 let win, motionTimer, settings={follow:false};
-let target=null, nextRoam=0, roamPause=0, lastTick=0;
+let target=null, nextRoam=0, roamPause=0, lastTick=0,activity='idle',motionNotice=0;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const settingsFile=()=>path.join(app.getPath('userData'),'settings.json');
 function save(){try{fs.writeFileSync(settingsFile(),JSON.stringify(settings,null,2));}catch(e){console.warn('Settings save failed',e.message);}}
@@ -15,6 +15,7 @@ function pickRoam(now){
 }
 function tick(){
  if(!win||win.isDestroyed())return;
+ if(activity==='feed'||activity==='sleep'||activity==='pet'||activity==='play')return;
  const now=Date.now(),dt=Math.min(.05,Math.max(.001,(now-(lastTick||now-16))/1000));lastTick=now;
  const [x,y]=win.getPosition(),[w,h]=win.getSize();
  let goal;
@@ -32,7 +33,7 @@ function tick(){
  const dx=goal.x-x,dy=goal.y-y,dist=Math.hypot(dx,dy);
  const maxStep=(settings.follow?185:68)*dt;
  const step=Math.min(maxStep,Math.max(0,dist-(settings.follow?65:0)));
- if(step>.3&&dist>0)win.setPosition(Math.round(x+dx/dist*step),Math.round(y+dy/dist*step));
+ if(step>.3&&dist>0){win.setPosition(Math.round(x+dx/dist*step),Math.round(y+dy/dist*step));if(now-motionNotice>350){win.webContents.send('pet:motion',true);motionNotice=now;}}
 }
 function createWindow(){
  const {workArea}=screen.getPrimaryDisplay();
@@ -62,4 +63,5 @@ ipcMain.handle('pet:settings:set',(_event,value)=>{
  settings.follow=value.follow;target=null;nextRoam=0;roamPause=Date.now()+3000;save();
  return {...settings};
 });
+ipcMain.on('pet:activity',(_event,value)=>{if(['idle','feed','sleep','pet','play','curious','walk','run'].includes(value))activity=value;});
 ipcMain.on('pet:quit',()=>app.quit());
