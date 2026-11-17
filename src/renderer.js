@@ -107,8 +107,15 @@ delaySlider.addEventListener('input',()=>{delayValue.textContent=delaySlider.val
 scaleSlider.addEventListener('change',()=>updateSetting({scale:Number(scaleSlider.value)}));
 delaySlider.addEventListener('change',()=>updateSetting({followDelay:Number(delaySlider.value)}));
 let walking=false,motionChanged=performance.now(),lastWalkStart=0;
-let roofState='away',roofRestStart=0,roofLastNap=0;
-window.naili?.onHomeState(value=>{if(!['away','returning','resting'].includes(value))return;if(roofState!==value){roofState=value;if(value==='resting')roofRestStart=performance.now();}});
+let roofState='away',roofRestStart=0,roofLastNap=0,roofPose='none',roofPoseUntil=0;
+window.naili?.onHomeState(value=>{
+ if(!['away','returning','resting'].includes(value))return;
+ if(roofState!==value){
+  const previous=roofState;roofState=value;
+  if(value==='resting'){roofRestStart=performance.now();roofPose='sit';roofPoseUntil=roofRestStart+3300;}
+  else {roofPose='none';roofPoseUntil=0;if(previous==='resting'&&timeline.name!=='roofWake'&&timeline.name!=='walk')timeline.enter('roofWake',performance.now(),850,true);}
+ }
+});
 window.naili?.onMotion(value=>{if(walking!==value){walking=value;motionChanged=performance.now();}});
 const behavior=window.NailiBehavior.create();
 let lastManual=0;
@@ -159,13 +166,20 @@ function draw(t){
   const eatPhase=eating?motion.phase:0;
   const biteActive=eating&&eatPhase>.20&&eatPhase<.88;
   const chew=state.reduceMotion?0:(biteActive?Math.sin(t*.025)*7:0);
-  const sleepy=mode==='sleep';
+  const sleepy=mode==='sleep'||mode==='roofLie';
   const sniffing=mode==='sniff'||mode==='grab';
   const carrying=mode==='carry'||(feedStage==='grab'&&mode!=='grab');
   const wag=state.reduceMotion?0:Math.sin(t*.004)*.045;
   const bow=mode==='grab'?Math.sin(Math.min(1,motion.phase)*Math.PI)*24:eating&&eatPhase<.22?Math.sin(eatPhase/.22*Math.PI)*13:0;
   const bodySquash=mode==='toilet'?1-.075*Math.sin(Math.PI*Math.min(1,motion.phase)):1;
-  ctx.save();ctx.translate(0,-bounce);ctx.translate(360,610);ctx.scale(1,bodySquash);ctx.translate(-360,-610);
+  ctx.save();ctx.translate(0,-bounce);
+  // Transitional Canvas poses until approved transparent Gen1 PNG frames are exported.
+  if(['roofSit','roofLie','roofStretch','roofWake'].includes(mode)){
+   const p=motion.ease;
+   const lower=mode==='roofLie'?0.24:mode==='roofSit'?0.10:mode==='roofStretch'?0.08*Math.sin(p*Math.PI):0.14*(1-p);
+   ctx.translate(360,690);ctx.scale(1+lower*.35,1-lower);ctx.translate(-360,-690);
+  }
+  ctx.translate(360,610);ctx.scale(1,bodySquash);ctx.translate(-360,-610);
   ellipse(358,688+bounce,175,23,'#735a4530');
   // warm caramel body, matching-color tail, cream ruff and fluffy cheeks
   ellipse(360,520,174,160,gradient(365,505,205,'#e5b887','#b78052'));
@@ -218,8 +232,25 @@ function frame(now){
    timeline.enter('idle',now,undefined,true);lastManual=Math.max(lastManual,now-2800);
   }
  }
- if(roofState==='resting'&&!walking&&!feedStage&&!state.drag&&!toiletEnd&&now-roofRestStart>7000&&now-roofLastNap>24000&&now-lastManual>9000&&timeline.name==='idle'){
-  roofLastNap=now;timeline.enter('sleep',now,5000,true);
+ const roofCanRest=roofState==='resting'&&!walking&&!feedStage&&!state.drag&&!toiletEnd&&now-lastManual>4500;
+ if(roofCanRest){
+  if(now>=roofPoseUntil&&roofPose==='sit'){
+   roofPose='lie';roofPoseUntil=now+6500;
+   timeline.enter('roofLie',now,undefined,true);
+  }else if(now>=roofPoseUntil&&roofPose==='lie'){
+   roofPose='nap';roofPoseUntil=now+6500;
+   if(now-roofLastNap>24000){roofLastNap=now;timeline.enter('sleep',now,5000,true);}
+  }else if(now>=roofPoseUntil&&roofPose==='nap'){
+   roofPose='stretch';roofPoseUntil=now+1250;
+   timeline.enter('roofStretch',now,1250,true);
+  }else if(now>=roofPoseUntil&&roofPose==='stretch'){
+   roofPose='sit';roofPoseUntil=now+9000;
+   timeline.enter('roofSit',now,undefined,true);
+  }else if(roofPose==='sit'&&timeline.name==='idle'){
+   timeline.enter('roofSit',now,undefined,true);
+  }
+ }else if(roofState!=='resting'&&['roofSit','roofLie'].includes(timeline.name)){
+  timeline.enter('roofWake',now,950,true);
  }
  ambient(now);draw(now);requestAnimationFrame(frame);
 }
