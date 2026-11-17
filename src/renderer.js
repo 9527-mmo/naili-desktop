@@ -77,6 +77,8 @@ window.naili?.onToilet(duration=>{
  timeline.enter('toilet',now,duration,true);say('奶栗去上厕所啦');
 });
 
+const panelToggle=document.getElementById('panel-toggle');
+panelToggle.addEventListener('change',async()=>{try{const v=await window.naili.setSettings({panelVisible:panelToggle.checked});panelToggle.checked=v.panelVisible;}catch{panelToggle.checked=!panelToggle.checked;}});
 const settingsPanel=document.getElementById('settings');
 const followToggle=document.getElementById('follow-toggle');
 const followDescription=document.getElementById('follow-description');
@@ -88,7 +90,7 @@ const fullScreenToggle=document.getElementById('fullscreen-toggle');
 const scaleSlider=document.getElementById('scale-slider'),scaleValue=document.getElementById('scale-value');
 const delaySlider=document.getElementById('delay-slider'),delayValue=document.getElementById('delay-value');
 function applySettings(v){
-  followToggle.checked=v.follow;fullScreenToggle.checked=v.fullScreen;
+  followToggle.checked=v.follow;fullScreenToggle.checked=v.fullScreen;panelToggle.checked=v.panelVisible;
   scaleSlider.value=v.scale;scaleValue.value=v.scale+'%';scaleValue.textContent=v.scale+'%';
   delaySlider.value=v.followDelay;delayValue.value=v.followDelay+' ms';delayValue.textContent=v.followDelay+' ms';
   followDescription.textContent=v.follow?'奶栗会保持距离跟随鼠标':'奶栗会在允许区域内随机探索';
