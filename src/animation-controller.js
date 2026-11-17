@@ -9,7 +9,12 @@
  play:{duration:1800,loop:false,priority:3},
  pet:{duration:2000,loop:false,priority:3},
  curious:{duration:2300,loop:false,priority:2},
- toilet:{duration:8500,loop:false,priority:4}
+ toilet:{duration:8500,loop:false,priority:4},
+ sniff:{duration:850,loop:false,priority:4},
+ grab:{duration:1000,loop:false,priority:4},
+ carry:{duration:750,loop:true,priority:4},
+ chew:{duration:4500,loop:false,priority:4},
+ groom:{duration:2600,loop:false,priority:2}
  };
  const clamp=x=>Math.min(1,Math.max(0,x));
  const smooth=x=>{x=clamp(x);return x*x*(3-2*x);};
