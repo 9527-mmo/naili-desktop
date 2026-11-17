@@ -7,7 +7,37 @@ const state={mode:'idle',until:0,blink:0,feedCount:0,drag:null,mouse:{x:360,y:35
 function say(s){status.textContent=s;status.classList.add('show');clearTimeout(say.timer);say.timer=setTimeout(()=>status.classList.remove('show'),1800);}
 const timeline=window.NailiAnimation.create();
 const foods=['carrot','leaf','apple','hay'];
-function action(mode,duration=2400){if(mode==='feed'){state.food=(state.food+1)%foods.length;state.feedCount++;}state.mode=mode;state.until=performance.now()+duration;timeline.enter(mode,performance.now(),duration);say(({feed:'咔嚓！今天吃'+({carrot:'胡萝卜',leaf:'青菜',apple:'苹果',hay:'干草'})[foods[state.food]]+'！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
+const settingsPanel=document.getElementById('settings');
+const followToggle=document.getElementById('follow-toggle');
+const followDescription=document.getElementById('follow-description');
+document.getElementById('settings-toggle').addEventListener('click',()=>{
+  settingsPanel.hidden=!settingsPanel.hidden;
+  document.getElementById('settings-toggle').setAttribute('aria-expanded',String(!settingsPanel.hidden));
+});
+window.naili?.getSettings().then(value=>{followToggle.checked=value.follow;followDescription.textContent=value.follow?'奶栗会慢慢靠近鼠标':'奶栗会随机探索桌面';}).catch(console.warn);
+followToggle.addEventListener('change',async()=>{
+  followToggle.disabled=true;
+  try{
+    const result=await window.naili.setFollow(followToggle.checked);
+    followToggle.checked=result.follow;
+    followDescription.textContent=result.follow?'奶栗会慢慢靠近鼠标':'奶栗会随机探索桌面';
+    say(result.follow?'开始跟着你啦':'奶栗要自己去逛逛');
+  }catch(e){followToggle.checked=!followToggle.checked;say('设置保存失败');}
+  finally{followToggle.disabled=false;}
+});
+// Quiet, randomized autonomous behavior with minimum dwell time.
+let nextAmbient=performance.now()+6500+Math.random()*6500;
+let lastAmbient='idle',lastManual=0;
+function ambient(now){
+  if(state.drag||now<nextAmbient||now-lastManual<6500||timeline.name!=='idle')return;
+  const choices=['idle','idle','idle','curious','pet','play','sleep'];
+  let selected=choices[Math.floor(Math.random()*choices.length)];
+  if(selected===lastAmbient)selected='idle';
+  lastAmbient=selected;
+  if(selected!=='idle')timeline.enter(selected,now);
+  nextAmbient=now+8000+Math.random()*13000;
+}
+function action(mode,duration=2400){lastManual=performance.now();nextAmbient=lastManual+duration+6000+Math.random()*5000;if(mode==='feed'){state.food=(state.food+1)%foods.length;state.feedCount++;}state.mode=mode;state.until=performance.now()+duration;timeline.enter(mode,performance.now(),duration);say(({feed:'咔嚓！今天吃'+({carrot:'胡萝卜',leaf:'青菜',apple:'苹果',hay:'干草'})[foods[state.food]]+'！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.action;if(a==='quit')window.naili?.quit();else action(a,a==='sleep'?6500:3000);}));
 canvas.addEventListener('pointerdown',e=>{state.drag={x:e.screenX,y:e.screenY,moved:false};canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointermove',e=>{const d=state.drag;if(d){const x=e.screenX-d.x,y=e.screenY-d.y;if(Math.abs(x)+Math.abs(y)>2){window.naili?.drag(x,y);d.moved=true;}d.x=e.screenX;d.y=e.screenY;}const r=canvas.getBoundingClientRect();state.mouse={x:(e.clientX-r.left)*2,y:(e.clientY-r.top)*2};});
@@ -64,5 +94,5 @@ function draw(t){
   if(sleepy){ctx.font='bold 28px sans-serif';ctx.fillStyle='#aa8fbd';ctx.fillText('Z z z',500,255);}
   ctx.restore();
 }
-function frame(now){draw(now);requestAnimationFrame(frame);}
+function frame(now){ambient(now);draw(now);requestAnimationFrame(frame);}
 requestAnimationFrame(frame);
