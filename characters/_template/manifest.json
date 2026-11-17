@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "name": "新角色",
+  "canvas": {
+    "width": 720,
+    "height": 780
+  },
+  "actions": {
+    "idle": {
+      "fps": 12,
+      "frames": [
+        "idle/000.png",
+        "idle/001.png"
+      ]
+    },
+    "walk": {
+      "fps": 12,
+      "frames": [
+        "walk/000.png",
+        "walk/001.png"
+      ]
+    },
+    "eat": {
+      "fps": 12,
+      "frames": [
+        "eat/000.png",
+        "eat/001.png"
+      ]
+    },
+    "sleep": {
+      "fps": 12,
+      "frames": [
+        "sleep/000.png",
+        "sleep/001.png"
+      ]
+    },
+    "play": {
+      "fps": 12,
+      "frames": [
+        "play/000.png",
+        "play/001.png"
+      ]
+    },
+    "pet": {
+      "fps": 12,
+      "frames": [
+        "pet/000.png",
+        "pet/001.png"
+      ]
+    }
+  }
+}
