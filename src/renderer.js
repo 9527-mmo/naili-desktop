@@ -36,19 +36,15 @@ scaleSlider.addEventListener('change',()=>updateSetting({scale:Number(scaleSlide
 delaySlider.addEventListener('change',()=>updateSetting({followDelay:Number(delaySlider.value)}));
 let walking=false;
 window.naili?.onMotion(value=>{walking=value;});
-// Quiet, randomized autonomous behavior with minimum dwell time.
-let nextAmbient=performance.now()+6500+Math.random()*6500;
-let lastAmbient='idle',lastManual=0;
+const behavior=window.NailiBehavior.create();
+let lastManual=0;
 function ambient(now){
-  if(state.drag||walking||now<nextAmbient||now-lastManual<6500||timeline.name!=='idle')return;
-  const choices=['idle','idle','idle','curious','pet','play','sleep'];
-  let selected=choices[Math.floor(Math.random()*choices.length)];
-  if(selected===lastAmbient)selected='idle';
-  lastAmbient=selected;
-  if(selected!=='idle')timeline.enter(selected,now);
-  nextAmbient=now+8000+Math.random()*13000;
+ behavior.setMoving(walking||Boolean(state.drag),now);
+ if(now-lastManual<5000||state.drag||walking)return;
+ const decision=behavior.tick(now);
+ if(decision.changed&&decision.mode!=='idle')timeline.enter(decision.mode,now);
 }
-function action(mode,duration=2400){lastManual=performance.now();nextAmbient=lastManual+duration+6000+Math.random()*5000;if(mode==='feed'){state.food=(state.food+1)%foods.length;state.feedCount++;}state.mode=mode;state.until=performance.now()+duration;timeline.enter(mode,performance.now(),duration);say(({feed:'咔嚓！今天吃'+({carrot:'胡萝卜',leaf:'青菜',apple:'苹果',hay:'干草'})[foods[state.food]]+'！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
+function action(mode,duration=2400){lastManual=performance.now();behavior.request(mode,lastManual,duration);if(mode==='feed'){state.food=(state.food+1)%foods.length;state.feedCount++;}state.mode=mode;state.until=performance.now()+duration;timeline.enter(mode,performance.now(),duration);say(({feed:'咔嚓！今天吃'+({carrot:'胡萝卜',leaf:'青菜',apple:'苹果',hay:'干草'})[foods[state.food]]+'！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.action;if(a==='quit')window.naili?.quit();else action(a,a==='sleep'?6500:3000);}));
 canvas.addEventListener('pointerdown',e=>{state.drag={x:e.screenX,y:e.screenY,moved:false};canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointermove',e=>{const d=state.drag;if(d){const x=e.screenX-d.x,y=e.screenY-d.y;if(Math.abs(x)+Math.abs(y)>2){window.naili?.drag(x,y);d.moved=true;}d.x=e.screenX;d.y=e.screenY;}const r=canvas.getBoundingClientRect();state.mouse={x:(e.clientX-r.left)*2,y:(e.clientY-r.top)*2};});
