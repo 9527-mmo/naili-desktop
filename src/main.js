@@ -8,6 +8,7 @@ let panel=null;let settings={...defaults},win,timer,activity='idle',roamTarget=n
 let toiletDue=Date.now()+240000,toiletTrip=false,toiletUntil=0;
 let feeding=null,feedStart=0,feedPicker=null,feedPoint=null,mouseMonitor=null,mouseBuffer='',lastRight=null;
 let cursorHistory=[],filteredTarget=null,moving=false,lastMovementReport=0;
+let homeOffset=0,nextHomeStep=0,homeRestUntil=0;
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 const rand=(a,b)=>a+Math.random()*(b-a);
 const settingsFile=()=>path.join(app.getPath('userData'),'settings.json');
@@ -52,6 +53,21 @@ function resize(){
  win.setSize(w,h);
  const pos=clampPosition(x,y);win.setPosition(pos.x,pos.y);
  resetMovement();
+}
+function panelHome(now){
+ if(!panel||panel.isDestroyed()||!win)return null;
+ const [px,py]=panel.getPosition(),[pw]=panel.getSize(),[w,h]=win.getSize();
+ // Canvas rabbit's visible feet are near 88% of the transparent pet window height.
+ // Keep the pet's feet aligned with the panel's wooden top, not its transparent bounds.
+ if(now>=nextHomeStep){
+  homeOffset=rand(-35,35);
+  nextHomeStep=now+rand(7000,14500);
+  homeRestUntil=now+rand(1200,3200);
+ }
+ const footY=0.88*h;
+ const target={x:px+(pw-w)/2+homeOffset,y:py-footY+12};
+ const display=screen.getDisplayNearestPoint({x:px,y:py});
+ return clampTo(display.workArea,target.x,target.y);
 }
 function pickRoam(now){
  const ds=allowedDisplays();
@@ -101,6 +117,10 @@ function tick(){
    filteredTarget=filteredTarget?{x:filteredTarget.x+(goal.x-filteredTarget.x)*smoothing,y:filteredTarget.y+(goal.y-filteredTarget.y)*smoothing}:goal;
    goal=filteredTarget;
    speed=clamp(450-settings.followDelay*.16,170,450);
+ }else if(settings.panelVisible&&!settings.fullScreen&&panel&&!panel.isDestroyed()){
+   filteredTarget=null;cursorHistory=[];roamTarget=null;
+   goal=panelHome(now);speed=75;
+   if(now<homeRestUntil&&Math.hypot(goal.x-x,goal.y-y)<28){reportMotion(false);return;}
  }else{
    filteredTarget=null;cursorHistory=[];
    if(!roamTarget||now>nextRoam)pickRoam(now);
@@ -109,7 +129,7 @@ function tick(){
    if(Math.hypot(goal.x-x,goal.y-y)<12){roamTarget=null;roamPause=now+rand(2500,6000);reportMotion(false);return;}
  }
  const dx=goal.x-x,dy=goal.y-y,dist=Math.hypot(dx,dy);
- const deadZone=toiletTrip?5:settings.follow?40:5;
+ const deadZone=toiletTrip?5:settings.follow?40:settings.panelVisible&&!settings.fullScreen&&panel?6:5;
  if(dist<=deadZone){reportMotion(false);return;}
  // Gentle deceleration, while avoiding instant teleportation.
  const step=Math.min(speed*dt,Math.max(0,(dist-deadZone)*.14));
@@ -187,9 +207,9 @@ function createPanel(){
  panel.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true});
  panel.on('closed',()=>{panel=null;});
 }
-function syncPanel(){if(settings.panelVisible)createPanel();else if(panel){panel.close();}}
+function syncPanel(){if(settings.panelVisible)createPanel();else if(panel){panel.close();}nextHomeStep=0;}
 function broadcastSettings(){for(const w of [win,panel])if(w&&!w.isDestroyed())w.webContents.send('pet:settings:changed',{...settings});}
-function movePanel(dx,dy){if(!panel)return;const [x,y]=panel.getPosition();const rect=screen.getDisplayNearestPoint({x,y}).workArea;panel.setPosition(clamp(Math.round(x+dx),rect.x,rect.x+rect.width-420),clamp(Math.round(y+dy),rect.y,rect.y+rect.height-204));}
+function movePanel(dx,dy){if(!panel)return;const [x,y]=panel.getPosition();const rect=screen.getDisplayNearestPoint({x,y}).workArea;panel.setPosition(clamp(Math.round(x+dx),rect.x,rect.x+rect.width-420),clamp(Math.round(y+dy),rect.y,rect.y+rect.height-204));homeRestUntil=0;}
 function createWindow(){
  const rect=screen.getPrimaryDisplay().workArea,[w,h]=size();
  win=new BrowserWindow({width:w,height:h,x:rect.x+Math.max(0,rect.width-w-30),y:rect.y+Math.max(0,rect.height-h-30),
