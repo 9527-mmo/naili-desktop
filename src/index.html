@@ -1,6 +1,6 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>奶栗桌面宠物</title><link rel="stylesheet" href="./style.css"></head>
 <body><div id="app"><canvas id="pet" width="720" height="780" aria-label="奶栗兔子"></canvas>
-<div id="toolbar"><button data-action="feed" title="喂食">🥕</button><button data-action="pet" title="摸摸">🤍</button><button data-action="sleep" title="睡觉">🌙</button><button data-action="play" title="玩耍">✨</button><button id="settings-toggle" title="设置" aria-expanded="false">⚙️</button><button data-action="quit" title="退出">×</button></div>
+<div id="toolbar"><button data-action="feed" title="喂食">🥕</button><select id="food-choice" title="选择食物"><option value="hay">🌾 提摩西草</option><option value="orchard">🌿 果园草</option><option value="alfalfa">🌱 苜蓿草</option><option value="pellet">🥣 兔粮</option><option value="carrot">🥕 胡萝卜</option><option value="leaf">🥬 叶菜</option><option value="apple">🍎 苹果</option><option value="herb">🍃 香草</option></select><button data-action="pet" title="摸摸">🤍</button><button data-action="sleep" title="睡觉">🌙</button><button data-action="play" title="玩耍">✨</button><button id="settings-toggle" title="设置" aria-expanded="false">⚙️</button><button data-action="quit" title="退出">×</button></div>
 <section id="settings" hidden aria-label="宠物设置">
   <strong>奶栗设置</strong>
   <label class="toggle"><input id="follow-toggle" type="checkbox"> 跟随鼠标</label>
@@ -10,7 +10,7 @@
   <input id="scale-slider" type="range" min="50" max="200" step="5" value="100">
   <label class="range-label" for="delay-slider">跟随延迟 <output id="delay-value">350 ms</output></label>
   <input id="delay-slider" type="range" min="0" max="1500" step="50" value="350">
-  <p id="follow-description" class="hint">关闭跟随后奶栗会自由活动</p>
+  <label class="toggle"><input id="toilet-toggle" type="checkbox"> 定时上厕所</label><button id="set-toilet" type="button" class="wide-button">📍 将奶栗当前位置设为厕所</button><p id="toilet-status" class="hint">尚未设置厕所位置</p><p class="hint">启用后每隔随机时间前往厕所；进食和睡眠时不会立即打断。</p><p id="follow-description" class="hint">关闭跟随后奶栗会自由活动</p>
 </section>
 <div id="status" role="status" aria-live="polite">奶栗来啦！</div></div>
 <script src="./animation-controller.js"></script><script src="./behavior-director.js"></script><script src="./character-loader.js"></script><script src="./renderer.js"></script></body></html>
