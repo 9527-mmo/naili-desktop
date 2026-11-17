@@ -82,7 +82,7 @@ function tick(){
  }
  if(activity==='toilet'){if(toiletUntil&&now>toiletUntil){toiletUntil=0;toiletTrip=false;toiletDue=now+rand(300000,720000);}reportMotion(false);return;}
  if(toiletUntil&&now<toiletUntil){reportMotion(false);return;}
- if(['feed','sleep','pet','play'].includes(activity)||now<manualPause){reportMotion(false);return;}
+ if(['feed','chew','grab','sleep','pet','play'].includes(activity)||now<manualPause){reportMotion(false);return;}
  const [x,y]=win.getPosition();
  let goal,speed;
  if(settings.toiletEnabled&&settings.toiletPosition&&now>=toiletDue&&!toiletTrip){toiletTrip=true;roamTarget=null;}
@@ -240,6 +240,6 @@ ipcMain.on('pet:drag',(_event,delta)=>{
  win.setPosition(pos.x,pos.y);manualPause=Date.now()+7000;resetMovement();
 });
 ipcMain.on('pet:toilet:finished',()=>{toiletTrip=false;toiletUntil=0;toiletDue=Date.now()+rand(300000,720000);});
-ipcMain.on('pet:activity',(_event,value)=>{if(['idle','feed','sleep','pet','play','curious','walk','run'].includes(value))activity=value;});
+ipcMain.on('pet:activity',(_event,value)=>{if(['idle','feed','chew','grab','carry','groom','sleep','pet','play','curious','walk','run','toilet'].includes(value))activity=value;});
 app.on('before-quit',stopMouseMonitor);
 ipcMain.on('pet:quit',()=>app.quit());
