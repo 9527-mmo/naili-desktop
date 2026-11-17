@@ -1,5 +1,7 @@
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('naili',{
+ dragPanel:(x,y)=>ipcRenderer.send('pet:panel:drag',{x,y}),
+ onSettingsChanged:callback=>{const listener=(_event,value)=>callback(value);ipcRenderer.on('pet:settings:changed',listener);return ()=>ipcRenderer.removeListener('pet:settings:changed',listener);},
  drag:(x,y)=>ipcRenderer.send('pet:drag',{x,y}),
  quit:()=>ipcRenderer.send('pet:quit'),
  getSettings:()=>ipcRenderer.invoke('pet:settings:get'),
