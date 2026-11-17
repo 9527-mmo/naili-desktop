@@ -1,9 +1,10 @@
 /* Procedural animation prototype: all drawing is original canvas artwork. */
 const canvas=document.getElementById('pet'),ctx=canvas.getContext('2d');
 const status=document.getElementById('status');
-const state={mode:'idle',until:0,blink:0,feedCount:0,drag:null,mouse:{x:360,y:350},last:performance.now()};
+const state={mode:'idle',until:0,blink:0,feedCount:0,drag:null,mouse:{x:360,y:350},last:performance.now(),food:0,reduceMotion:window.matchMedia('(prefers-reduced-motion: reduce)').matches};
 function say(s){status.textContent=s;status.classList.add('show');clearTimeout(say.timer);say.timer=setTimeout(()=>status.classList.remove('show'),1800);}
-function action(mode,duration=2400){state.mode=mode;state.until=performance.now()+duration;say(({feed:'咔嚓咔嚓，好吃！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
+const foods=['carrot','leaf','apple','hay'];
+function action(mode,duration=2400){if(mode==='feed'){state.food=(state.food+1)%foods.length;state.feedCount++;}state.mode=mode;state.until=performance.now()+duration;say(({feed:'咔嚓！今天吃'+({carrot:'胡萝卜',leaf:'青菜',apple:'苹果',hay:'干草'})[foods[state.food]]+'！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.action;if(a==='quit')window.naili?.quit();else action(a,a==='sleep'?6500:3000);}));
 canvas.addEventListener('pointerdown',e=>{state.drag={x:e.screenX,y:e.screenY,moved:false};canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointermove',e=>{const d=state.drag;if(d){const x=e.screenX-d.x,y=e.screenY-d.y;if(Math.abs(x)+Math.abs(y)>2){window.naili?.drag(x,y);d.moved=true;}d.x=e.screenX;d.y=e.screenY;}const r=canvas.getBoundingClientRect();state.mouse={x:(e.clientX-r.left)*2,y:(e.clientY-r.top)*2};});
@@ -16,10 +17,10 @@ function ear(x,y,angle,wiggle){ctx.save();ctx.translate(x,y);ctx.rotate(angle+wi
 function draw(t){
   ctx.clearRect(0,0,720,780);
   const mode=state.mode;
-  const bounce=mode==='play'?Math.abs(Math.sin(t*.009))*40:Math.sin(t*.0028)*5;
-  const chew=mode==='feed'?Math.sin(t*.025)*7:0;
+  const bounce=state.reduceMotion?0:(mode==='play'?Math.abs(Math.sin(t*.009))*40:Math.sin(t*.0028)*5);
+  const chew=state.reduceMotion?0:(mode==='feed'?Math.sin(t*.025)*7:0);
   const sleepy=mode==='sleep';
-  const wag=Math.sin(t*.004)*.045;
+  const wag=state.reduceMotion?0:Math.sin(t*.004)*.045;
   ctx.save();ctx.translate(0,-bounce);
   ellipse(358,688+bounce,175,23,'#735a4530');
   // warm caramel body, matching-color tail, cream ruff and fluffy cheeks
@@ -39,7 +40,15 @@ function draw(t){
   ellipse(360,445,65,49,'#fff4e7');ellipse(339,455,36,27,'#fff8ef');ellipse(382,455,36,27,'#fff8ef');
   ellipse(360,433,13,9,'#ba7f7a');
   ctx.strokeStyle='#845b4e';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(360,441);ctx.lineTo(360,451);ctx.quadraticCurveTo(348,466,339,452);ctx.moveTo(360,451);ctx.quadraticCurveTo(372,466,382,452);ctx.stroke();
-  if(mode==='feed'){ctx.save();ctx.translate(405,505+chew);ctx.rotate(-.4);path([[0,0],[29,-15],[24,70],[12,93],[-2,68]],'#f68b32');path([[8,-4],[-10,-32],[15,-19],[23,-45],[29,-12]],'#6ba75c');ctx.restore();}
+  if(mode==='feed'){
+    ctx.save();ctx.translate(405,505+chew);ctx.rotate(-.4);
+    const food=foods[state.food];
+    if(food==='carrot'){path([[0,0],[29,-15],[24,70],[12,93],[-2,68]],'#f68b32');path([[8,-4],[-10,-32],[15,-19],[23,-45],[29,-12]],'#6ba75c');}
+    else if(food==='leaf'){ellipse(12,22,29,57,'#78b96b',-.35);ctx.strokeStyle='#438a43';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(6,70);ctx.lineTo(17,-19);ctx.stroke();}
+    else if(food==='apple'){ellipse(13,35,37,36,'#db5551');ellipse(23,28,15,20,'#ef7770');path([[10,0],[16,-27],[22,0]],'#6c8345');ellipse(28,-10,17,8,'#78a85b',-.4);}
+    else {for(let i=0;i<7;i++){ctx.strokeStyle=i%2?'#bca35d':'#d5ba70';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-20+i*9,65);ctx.quadraticCurveTo(12+i*2,17,-10+i*8,-35);ctx.stroke();}}
+    ctx.restore();
+  }
   if(mode==='pet'){for(let i=0;i<3;i++){ctx.globalAlpha=.65;ellipse(475+i*22,267-i*20,7,12,'#f4a4ad',-.3);}ctx.globalAlpha=1;}
   if(sleepy){ctx.font='bold 28px sans-serif';ctx.fillStyle='#aa8fbd';ctx.fillText('Z z z',500,255);}
   ctx.restore();
