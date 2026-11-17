@@ -14,22 +14,33 @@ document.getElementById('settings-toggle').addEventListener('click',()=>{
   settingsPanel.hidden=!settingsPanel.hidden;
   document.getElementById('settings-toggle').setAttribute('aria-expanded',String(!settingsPanel.hidden));
 });
-window.naili?.getSettings().then(value=>{followToggle.checked=value.follow;followDescription.textContent=value.follow?'奶栗会慢慢靠近鼠标':'奶栗会随机探索桌面';}).catch(console.warn);
-followToggle.addEventListener('change',async()=>{
-  followToggle.disabled=true;
-  try{
-    const result=await window.naili.setFollow(followToggle.checked);
-    followToggle.checked=result.follow;
-    followDescription.textContent=result.follow?'奶栗会慢慢靠近鼠标':'奶栗会随机探索桌面';
-    say(result.follow?'开始跟着你啦':'奶栗要自己去逛逛');
-  }catch(e){followToggle.checked=!followToggle.checked;say('设置保存失败');}
-  finally{followToggle.disabled=false;}
-});
+const fullScreenToggle=document.getElementById('fullscreen-toggle');
+const scaleSlider=document.getElementById('scale-slider'),scaleValue=document.getElementById('scale-value');
+const delaySlider=document.getElementById('delay-slider'),delayValue=document.getElementById('delay-value');
+function applySettings(v){
+  followToggle.checked=v.follow;fullScreenToggle.checked=v.fullScreen;
+  scaleSlider.value=v.scale;scaleValue.value=v.scale+'%';scaleValue.textContent=v.scale+'%';
+  delaySlider.value=v.followDelay;delayValue.value=v.followDelay+' ms';delayValue.textContent=v.followDelay+' ms';
+  followDescription.textContent=v.follow?'奶栗会保持距离跟随鼠标':'奶栗会在允许区域内随机探索';
+}
+window.naili?.getSettings().then(applySettings).catch(console.warn);
+async function updateSetting(patch){
+ try{applySettings(await window.naili.setSettings(patch));}
+ catch(e){say('设置保存失败');const old=await window.naili.getSettings();applySettings(old);}
+}
+followToggle.addEventListener('change',()=>updateSetting({follow:followToggle.checked}));
+fullScreenToggle.addEventListener('change',()=>updateSetting({fullScreen:fullScreenToggle.checked}));
+scaleSlider.addEventListener('input',()=>{scaleValue.textContent=scaleSlider.value+'%';});
+delaySlider.addEventListener('input',()=>{delayValue.textContent=delaySlider.value+' ms';});
+scaleSlider.addEventListener('change',()=>updateSetting({scale:Number(scaleSlider.value)}));
+delaySlider.addEventListener('change',()=>updateSetting({followDelay:Number(delaySlider.value)}));
+let walking=false;
+window.naili?.onMotion(value=>{walking=value;});
 // Quiet, randomized autonomous behavior with minimum dwell time.
 let nextAmbient=performance.now()+6500+Math.random()*6500;
 let lastAmbient='idle',lastManual=0;
 function ambient(now){
-  if(state.drag||now<nextAmbient||now-lastManual<6500||timeline.name!=='idle')return;
+  if(state.drag||walking||now<nextAmbient||now-lastManual<6500||timeline.name!=='idle')return;
   const choices=['idle','idle','idle','curious','pet','play','sleep'];
   let selected=choices[Math.floor(Math.random()*choices.length)];
   if(selected===lastAmbient)selected='idle';
