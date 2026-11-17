@@ -2,7 +2,7 @@
 <body><div id="app"><canvas id="pet" width="720" height="780" aria-label="奶栗兔子"></canvas>
 <div id="toolbar"><button data-action="feed" title="喂食">🥕</button><select id="food-choice" title="选择食物"><option value="hay">🌾 提摩西草</option><option value="orchard">🌿 果园草</option><option value="alfalfa">🌱 苜蓿草</option><option value="pellet">🥣 兔粮</option><option value="carrot">🥕 胡萝卜</option><option value="leaf">🥬 叶菜</option><option value="apple">🍎 苹果</option><option value="herb">🍃 香草</option></select><button data-action="pet" title="摸摸">🤍</button><button data-action="sleep" title="睡觉">🌙</button><button data-action="play" title="玩耍">✨</button><button id="settings-toggle" title="设置" aria-expanded="false">⚙️</button><button data-action="quit" title="退出">×</button></div>
 <section id="settings" hidden aria-label="宠物设置">
-  <strong>奶栗设置</strong>
+  <strong>奶栗设置</strong><div class="motion-test"><span>Gen 1 动画测试：</span><button type="button" data-motion-test="walk">行走</button><button type="button" data-motion-test="run">奔跑</button><button type="button" data-motion-test="turn">转身</button></div>
   <label class="toggle"><input id="follow-toggle" type="checkbox"> 跟随鼠标</label>
   <label class="toggle"><input id="fullscreen-toggle" type="checkbox"> 全屏活动范围</label>
   <p class="hint">开启后可离开默认活动区域，跟随鼠标或自由探索整个桌面及其他显示器；不会创建遮挡屏幕的全屏窗口。</p>
