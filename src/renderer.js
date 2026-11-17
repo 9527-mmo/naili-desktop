@@ -34,8 +34,8 @@ scaleSlider.addEventListener('input',()=>{scaleValue.textContent=scaleSlider.val
 delaySlider.addEventListener('input',()=>{delayValue.textContent=delaySlider.value+' ms';});
 scaleSlider.addEventListener('change',()=>updateSetting({scale:Number(scaleSlider.value)}));
 delaySlider.addEventListener('change',()=>updateSetting({followDelay:Number(delaySlider.value)}));
-let walking=false;
-window.naili?.onMotion(value=>{walking=value;});
+let walking=false,motionChanged=performance.now(),lastWalkStart=0;
+window.naili?.onMotion(value=>{if(walking!==value){walking=value;motionChanged=performance.now();}});
 const behavior=window.NailiBehavior.create();
 let lastManual=0;
 function ambient(now){
@@ -66,7 +66,8 @@ function draw(t){
     return;
   }
   const mode=state.mode;
-  const bounce=state.reduceMotion?0:(mode==='play'?Math.abs(Math.sin(t*.009))*40:Math.sin(t*.0028)*5);
+  const gait=mode==='walk'?Math.sin(motion.phase*Math.PI*2):0;
+  const bounce=state.reduceMotion?0:(mode==='play'?Math.abs(Math.sin(t*.009))*40:mode==='walk'?Math.abs(gait)*7:Math.sin(t*.0028)*5);
   const chew=state.reduceMotion?0:(mode==='feed'?Math.sin(t*.025)*7:0);
   const sleepy=mode==='sleep';
   const wag=state.reduceMotion?0:Math.sin(t*.004)*.045;
@@ -75,7 +76,7 @@ function draw(t){
   // warm caramel body, matching-color tail, cream ruff and fluffy cheeks
   ellipse(360,520,174,160,gradient(365,505,205,'#e5b887','#b78052'));
   ellipse(507,550,52,57,gradient(507,540,62,'#d8a371','#b78052'));
-  ellipse(276,635,75,42,'#d8a576');ellipse(452,635,75,42,'#d8a576');
+  ellipse(276,635+(state.reduceMotion?0:gait*9),75,42,'#d8a576');ellipse(452,635-(state.reduceMotion?0:gait*9),75,42,'#d8a576');
   ellipse(362,496,154,132,gradient(362,455,175,'#fff4df','#e7c8a5'));
   ear(288,291,-.14,wag);ear(438,292,.16,-wag);
   ellipse(360,371,181,159,gradient(350,330,195,'#efc596','#b67c50'));
@@ -102,5 +103,13 @@ function draw(t){
   if(sleepy){ctx.font='bold 28px sans-serif';ctx.fillStyle='#aa8fbd';ctx.fillText('Z z z',500,255);}
   ctx.restore();
 }
-function frame(now){ambient(now);draw(now);requestAnimationFrame(frame);}
+function frame(now){
+ if(!timeline.locked&&!state.drag){
+  if(walking&&now-motionChanged>180&&timeline.name!=='walk'){if(timeline.enter('walk',now))lastWalkStart=now;}
+  else if(!walking&&timeline.name==='walk'&&now-motionChanged>500&&now-lastWalkStart>850){
+   timeline.enter('idle',now,undefined,true);nextAmbient=Math.max(nextAmbient,now+2200);
+  }
+ }
+ ambient(now);draw(now);requestAnimationFrame(frame);
+}
 requestAnimationFrame(frame);
