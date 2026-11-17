@@ -16,5 +16,6 @@ contextBridge.exposeInMainWorld('naili',{
  setToiletHere:()=>ipcRenderer.invoke('pet:toilet:set-current'),
  toiletFinished:()=>ipcRenderer.send('pet:toilet:finished'),
  onToilet:callback=>{const listener=(_event,duration)=>callback(duration);ipcRenderer.on('pet:toilet:start',listener);return ()=>ipcRenderer.removeListener('pet:toilet:start',listener);},
+ onHomeState:callback=>{const listener=(_event,state)=>callback(state);ipcRenderer.on('pet:home:state',listener);return ()=>ipcRenderer.removeListener('pet:home:state',listener);},
  onMotion:callback=>{const listener=(_event,moving)=>callback(moving);ipcRenderer.on('pet:motion',listener);return ()=>ipcRenderer.removeListener('pet:motion',listener);}
 });
