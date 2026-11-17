@@ -3,8 +3,8 @@ const fs=require('fs'),path=require('path');
 const {spawn,spawnSync}=require('child_process');
 const os=require('os');
 const BASE={width:360,height:390};
-const defaults={follow:false,fullScreen:false,scale:100,followDelay:350,toiletEnabled:false,toiletPosition:null,activeFeed:false};
-let settings={...defaults},win,timer,activity='idle',roamTarget=null,nextRoam=0,roamPause=0,lastTick=0,manualPause=0;
+const defaults={panelVisible:true,workStart:'09:00',workEnd:'18:00',monthlySalary:8000,salaryMode:'work',follow:false,fullScreen:false,scale:100,followDelay:350,toiletEnabled:false,toiletPosition:null,activeFeed:false};
+let panel=null;let settings={...defaults},win,timer,activity='idle',roamTarget=null,nextRoam=0,roamPause=0,lastTick=0,manualPause=0;
 let toiletDue=Date.now()+240000,toiletTrip=false,toiletUntil=0;
 let feeding=null,feedStart=0,feedPicker=null,feedPoint=null,mouseMonitor=null,mouseBuffer='',lastRight=null;
 let cursorHistory=[],filteredTarget=null,moving=false,lastMovementReport=0;
@@ -12,7 +12,7 @@ const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 const rand=(a,b)=>a+Math.random()*(b-a);
 const settingsFile=()=>path.join(app.getPath('userData'),'settings.json');
 function normalize(raw){
- return {follow:raw?.follow===true,fullScreen:raw?.fullScreen===true,
+ return {panelVisible:raw?.panelVisible!==false,workStart:/^([01]\d|2[0-3]):[0-5]\d$/.test(raw?.workStart)?raw.workStart:'09:00',workEnd:/^([01]\d|2[0-3]):[0-5]\d$/.test(raw?.workEnd)?raw.workEnd:'18:00',monthlySalary:Number.isFinite(raw?.monthlySalary)?clamp(raw.monthlySalary,0,100000000):8000,salaryMode:raw?.salaryMode==='calendar'?'calendar':'work',follow:raw?.follow===true,fullScreen:raw?.fullScreen===true,
  scale:clamp(Number.isFinite(raw?.scale)?Math.round(raw.scale):100,50,200),
  followDelay:clamp(Number.isFinite(raw?.followDelay)?Math.round(raw.followDelay):350,0,1500),
  activeFeed:raw?.activeFeed===true,
@@ -179,6 +179,17 @@ function beginFeed(food,point){
  win.webContents.send('pet:feed:stage','chase',food);
  return {ok:true};
 }
+function createPanel(){
+ if(panel&&!panel.isDestroyed())return;
+ const rect=screen.getPrimaryDisplay().workArea;
+ panel=new BrowserWindow({width:420,height:235,x:rect.x+Math.max(0,rect.width-450),y:rect.y+Math.max(0,rect.height-260),frame:false,transparent:true,alwaysOnTop:true,resizable:false,skipTaskbar:true,hasShadow:false,webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false}});
+ panel.loadFile(path.join(__dirname,'countdown.html'));
+ panel.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true});
+ panel.on('closed',()=>{panel=null;});
+}
+function syncPanel(){if(settings.panelVisible)createPanel();else if(panel){panel.close();}}
+function broadcastSettings(){for(const w of [win,panel])if(w&&!w.isDestroyed())w.webContents.send('pet:settings:changed',{...settings});}
+function movePanel(dx,dy){if(!panel)return;const [x,y]=panel.getPosition();const rect=screen.getDisplayNearestPoint({x,y}).workArea;panel.setPosition(clamp(Math.round(x+dx),rect.x,rect.x+rect.width-420),clamp(Math.round(y+dy),rect.y,rect.y+rect.height-235));}
 function createWindow(){
  const rect=screen.getPrimaryDisplay().workArea,[w,h]=size();
  win=new BrowserWindow({width:w,height:h,x:rect.x+Math.max(0,rect.width-w-30),y:rect.y+Math.max(0,rect.height-h-30),
@@ -191,7 +202,7 @@ function createWindow(){
 }
 app.whenReady().then(()=>{
  try{settings=normalize(JSON.parse(fs.readFileSync(settingsFile(),'utf8')));}catch{settings={...defaults};}
- createWindow();
+ createWindow();syncPanel();
  if(settings.activeFeed)startMouseMonitor();
  screen.on('display-removed',()=>{if(win){const [x,y]=win.getPosition(),p=clampPosition(x,y);win.setPosition(p.x,p.y);resetMovement();}});
  app.on('activate',()=>{if(!BrowserWindow.getAllWindows().length)createWindow();});
@@ -202,6 +213,11 @@ ipcMain.handle('pet:settings:set',(_event,patch)=>{
  if(!patch||typeof patch!=='object'||Array.isArray(patch))throw Error('Invalid settings');
  const keys=Object.keys(patch);
  if(!keys.length||keys.some(k=>!Object.hasOwn(defaults,k)))throw Error('Unknown setting');
+ if('panelVisible'in patch&&typeof patch.panelVisible!=='boolean')throw Error('Invalid panelVisible');
+ if('workStart'in patch&&!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(patch.workStart))throw Error('Invalid workStart');
+ if('workEnd'in patch&&!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(patch.workEnd))throw Error('Invalid workEnd');
+ if('monthlySalary'in patch&&(!Number.isFinite(patch.monthlySalary)||patch.monthlySalary<0||patch.monthlySalary>100000000))throw Error('Invalid monthlySalary');
+ if('salaryMode'in patch&&!['work','calendar'].includes(patch.salaryMode))throw Error('Invalid salaryMode');
  if('activeFeed'in patch&&typeof patch.activeFeed!=='boolean')throw Error('Invalid activeFeed');
  if('toiletEnabled'in patch&&typeof patch.toiletEnabled!=='boolean')throw Error('Invalid toiletEnabled');
  if('toiletPosition'in patch&&patch.toiletPosition!==null&&(!Number.isFinite(patch.toiletPosition?.x)||!Number.isFinite(patch.toiletPosition?.y)))throw Error('Invalid toiletPosition');
@@ -209,7 +225,7 @@ ipcMain.handle('pet:settings:set',(_event,patch)=>{
  if('fullScreen'in patch&&typeof patch.fullScreen!=='boolean')throw Error('Invalid fullScreen');
  if('scale'in patch&&(!Number.isInteger(patch.scale)||patch.scale<50||patch.scale>200))throw Error('Invalid scale');
  if('followDelay'in patch&&(!Number.isInteger(patch.followDelay)||patch.followDelay<0||patch.followDelay>1500))throw Error('Invalid followDelay');
- const oldScale=settings.scale;settings={...settings,...patch};save();
+ const oldScale=settings.scale;settings={...settings,...patch};save();syncPanel();broadcastSettings();
  if(patch.activeFeed===false&&feeding){feeding=null;win.webContents.send('pet:feed:stage','cancel','');reportMotion(false);}
  if('activeFeed'in patch){if(settings.activeFeed)startMouseMonitor();else {stopMouseMonitor();if(feedPicker)feedPicker.close();}}
  if('toiletEnabled'in patch||'toiletPosition'in patch){toiletTrip=false;toiletUntil=0;toiletDue=Date.now()+rand(180000,420000);}
@@ -243,3 +259,5 @@ ipcMain.on('pet:toilet:finished',()=>{toiletTrip=false;toiletUntil=0;toiletDue=D
 ipcMain.on('pet:activity',(_event,value)=>{if(['idle','feed','chew','grab','carry','groom','sleep','pet','play','curious','walk','run','toilet'].includes(value))activity=value;});
 app.on('before-quit',stopMouseMonitor);
 ipcMain.on('pet:quit',()=>app.quit());
+
+ipcMain.on('pet:panel:drag',(_event,payload)=>{if(panel&&_event.sender===panel.webContents&&Number.isFinite(payload?.x)&&Number.isFinite(payload?.y))movePanel(payload.x,payload.y);});
