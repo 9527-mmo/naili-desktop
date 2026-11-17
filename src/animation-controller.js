@@ -1,35 +1,44 @@
-/* Animation state machine, independent of character artwork. */
+/* Time-based behavior controller. Independent of art packs and refresh rate. */
 (function(){
  const definitions={
-  idle:{duration:4000,loop:true},
-  walk:{duration:600,loop:true},
-  run:{duration:400,loop:true},
-  feed:{duration:3600,loop:false},
-  sleep:{duration:6500,loop:false},
-  play:{duration:850,loop:false},
-  pet:{duration:1600,loop:false},
-  curious:{duration:1800,loop:false}
+ idle:{duration:4400,loop:true,priority:0},
+ walk:{duration:720,loop:true,priority:1},
+ run:{duration:480,loop:true,priority:1},
+ feed:{duration:4200,loop:false,priority:3},
+ sleep:{duration:9000,loop:false,priority:2},
+ play:{duration:1800,loop:false,priority:3},
+ pet:{duration:2000,loop:false,priority:3},
+ curious:{duration:2300,loop:false,priority:2}
  };
  const clamp=x=>Math.min(1,Math.max(0,x));
  const smooth=x=>{x=clamp(x);return x*x*(3-2*x);};
  function create(){
    let current='idle',start=performance.now(),duration=definitions.idle.duration;
+   let transition={from:'idle',start,ms:0}, lastEnd=start;
+   function enter(name,now=performance.now(),override,force=false){
+     if(!definitions[name])return false;
+     if(name===current)return false;
+     const currentDef=definitions[current];
+     if(!force&&!currentDef.loop&&now-start<duration&&definitions[name].priority<=currentDef.priority)return false;
+     if(!force&&name==='idle'&&now-start<Math.min(duration,650))return false;
+     const from=current;current=name;start=now;duration=override||definitions[name].duration;
+     transition={from,start:now,ms:from==='idle'||name==='idle'?340:240};
+     return true;
+   }
    return {
-     enter(name,now=performance.now(),override){
-       if(!definitions[name])name='idle';
-       current=name;start=now;duration=override||definitions[name].duration;
-       return duration;
-     },
+     enter,
      sample(now=performance.now()){
-       const def=definitions[current];
-       const elapsed=Math.max(0,now-start);
-       if(!def.loop&&elapsed>=duration){current='idle';start=now;duration=definitions.idle.duration;}
-       const progress=(now-start)/duration;
-       const phase=definitions[current].loop?progress%1:clamp(progress);
-       const ease=smooth(phase);
-       return {name:current,phase,ease,elapsed:now-start,duration};
+       if(!definitions[current].loop&&now-start>=duration){
+         lastEnd=now;enter('idle',now,undefined,true);
+       }
+       const elapsed=Math.max(0,now-start),def=definitions[current];
+       const phase=def.loop?(elapsed/duration)%1:clamp(elapsed/duration);
+       const blend=transition.ms?smooth((now-transition.start)/transition.ms):1;
+       return {name:current,phase,ease:smooth(phase),elapsed,duration,
+         from:transition.from,blend,transitioning:blend<1};
      },
-     get name(){return current;}
+     get name(){return current;},
+     get locked(){return !definitions[current].loop;}
    };
  }
  window.NailiAnimation={create,definitions};
