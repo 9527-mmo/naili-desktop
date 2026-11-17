@@ -8,7 +8,7 @@ let panel=null;let settings={...defaults},win,timer,activity='idle',roamTarget=n
 let toiletDue=Date.now()+240000,toiletTrip=false,toiletUntil=0;
 let feeding=null,feedStart=0,feedPicker=null,feedPoint=null,mouseMonitor=null,mouseBuffer='',lastRight=null;
 let cursorHistory=[],filteredTarget=null,moving=false,lastMovementReport=0;
-let homeOffset=0,nextHomeStep=0,homeRestUntil=0;
+let homeOffset=0,nextHomeStep=0,homeRestUntil=0,homeState='away',lastHomeBroadcast=0;
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 const rand=(a,b)=>a+Math.random()*(b-a);
 const settingsFile=()=>path.join(app.getPath('userData'),'settings.json');
@@ -54,6 +54,11 @@ function resize(){
  const pos=clampPosition(x,y);win.setPosition(pos.x,pos.y);
  resetMovement();
 }
+function setHomeState(next,now=Date.now()){
+ if(next===homeState&&now-lastHomeBroadcast<15000)return;
+ homeState=next;lastHomeBroadcast=now;
+ if(win&&!win.isDestroyed())win.webContents.send('pet:home:state',next);
+}
 function panelHome(now){
  if(!panel||panel.isDestroyed()||!win)return null;
  const [px,py]=panel.getPosition(),[pw]=panel.getSize(),[w,h]=win.getSize();
@@ -82,6 +87,7 @@ function tick(){
  if(!win||win.isDestroyed())return;
  const now=Date.now(),dt=clamp((now-(lastTick||now-16))/1000,.001,.06);lastTick=now;
  if(feeding){
+  setHomeState('away',now);
   if(now-feedStart>45000){const home=feeding.home;feeding=null;const p=clampPosition(home.x,home.y);win.setPosition(p.x,p.y);win.webContents.send('pet:feed:stage','cancel','');reportMotion(false);return;}
   if(feeding.stage==='grab'){if(now<feeding.grabUntil){reportMotion(false);return;}feeding.stage='return';win.webContents.send('pet:feed:stage','carry',feeding.food);}
   const [fx,fy]=win.getPosition(),goal=feeding.stage==='return'?feeding.home:feeding.target;
@@ -96,7 +102,7 @@ function tick(){
   const speed=feeding.stage==='chase'?440:190,step=Math.min(speed*dt,dist);
   win.setPosition(Math.round(fx+dx/dist*step),Math.round(fy+dy/dist*step));reportMotion(true);return;
  }
- if(activity==='toilet'){if(toiletUntil&&now>toiletUntil){toiletUntil=0;toiletTrip=false;toiletDue=now+rand(300000,720000);}reportMotion(false);return;}
+ if(activity==='toilet'){setHomeState('away',now);if(toiletUntil&&now>toiletUntil){toiletUntil=0;toiletTrip=false;toiletDue=now+rand(300000,720000);}reportMotion(false);return;}
  if(toiletUntil&&now<toiletUntil){reportMotion(false);return;}
  if(['feed','chew','grab','sleep','pet','play'].includes(activity)||now<manualPause){reportMotion(false);return;}
  const [x,y]=win.getPosition();
@@ -106,6 +112,7 @@ function tick(){
   goal=clampPosition(settings.toiletPosition.x,settings.toiletPosition.y);speed=110;
   if(Math.hypot(goal.x-x,goal.y-y)<18){if(!toiletUntil){toiletUntil=now+rand(6500,10000);win.webContents.send('pet:toilet:start',toiletUntil-now);}reportMotion(false);return;}
  }else if(settings.follow){
+   setHomeState('away',now);
    const p=screen.getCursorScreenPoint();
    cursorHistory.push({x:p.x,y:p.y,t:now});
    cursorHistory=cursorHistory.filter(v=>now-v.t<=settings.followDelay+180);
@@ -120,8 +127,11 @@ function tick(){
  }else if(settings.panelVisible&&!settings.fullScreen&&panel&&!panel.isDestroyed()){
    filteredTarget=null;cursorHistory=[];roamTarget=null;
    goal=panelHome(now);speed=75;
-   if(now<homeRestUntil&&Math.hypot(goal.x-x,goal.y-y)<28){reportMotion(false);return;}
+   const homeDistance=Math.hypot(goal.x-x,goal.y-y);
+   setHomeState(homeDistance<18?'resting':'returning',now);
+   if(now<homeRestUntil&&homeDistance<28){reportMotion(false);return;}
  }else{
+   setHomeState('away',now);
    filteredTarget=null;cursorHistory=[];
    if(!roamTarget||now>nextRoam)pickRoam(now);
    if(now<roamPause){reportMotion(false);return;}
@@ -207,7 +217,7 @@ function createPanel(){
  panel.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true});
  panel.on('closed',()=>{panel=null;});
 }
-function syncPanel(){if(settings.panelVisible)createPanel();else if(panel){panel.close();}nextHomeStep=0;}
+function syncPanel(){if(settings.panelVisible)createPanel();else if(panel){panel.close();}nextHomeStep=0;homeState='away';}
 function broadcastSettings(){for(const w of [win,panel])if(w&&!w.isDestroyed())w.webContents.send('pet:settings:changed',{...settings});}
 function movePanel(dx,dy){if(!panel)return;const [x,y]=panel.getPosition();const rect=screen.getDisplayNearestPoint({x,y}).workArea;panel.setPosition(clamp(Math.round(x+dx),rect.x,rect.x+rect.width-420),clamp(Math.round(y+dy),rect.y,rect.y+rect.height-204));homeRestUntil=0;}
 function createWindow(){
