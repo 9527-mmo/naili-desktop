@@ -1,9 +1,10 @@
 const {app,BrowserWindow,screen,ipcMain}=require('electron');
 const fs=require('fs'),path=require('path');
 const BASE={width:360,height:390};
-const defaults={follow:false,fullScreen:false,scale:100,followDelay:350,toiletEnabled:false,toiletPosition:null};
+const defaults={follow:false,fullScreen:false,scale:100,followDelay:350,toiletEnabled:false,toiletPosition:null,activeFeed:false};
 let settings={...defaults},win,timer,activity='idle',roamTarget=null,nextRoam=0,roamPause=0,lastTick=0,manualPause=0;
 let toiletDue=Date.now()+240000,toiletTrip=false,toiletUntil=0;
+let feeding=null,feedStart=0;
 let cursorHistory=[],filteredTarget=null,moving=false,lastMovementReport=0;
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 const rand=(a,b)=>a+Math.random()*(b-a);
@@ -12,6 +13,7 @@ function normalize(raw){
  return {follow:raw?.follow===true,fullScreen:raw?.fullScreen===true,
  scale:clamp(Number.isFinite(raw?.scale)?Math.round(raw.scale):100,50,200),
  followDelay:clamp(Number.isFinite(raw?.followDelay)?Math.round(raw.followDelay):350,0,1500),
+ activeFeed:raw?.activeFeed===true,
  toiletEnabled:raw?.toiletEnabled===true,toiletPosition:raw?.toiletPosition&&Number.isFinite(raw.toiletPosition.x)&&Number.isFinite(raw.toiletPosition.y)?{x:raw.toiletPosition.x,y:raw.toiletPosition.y}:null};
 }
 function save(){try{fs.writeFileSync(settingsFile(),JSON.stringify(settings,null,2));}catch(e){console.warn('Cannot save pet settings',e);}}
@@ -61,6 +63,19 @@ function pickRoam(now){
 function tick(){
  if(!win||win.isDestroyed())return;
  const now=Date.now(),dt=clamp((now-(lastTick||now-16))/1000,.001,.06);lastTick=now;
+ if(feeding){
+  const [fx,fy]=win.getPosition(),goal=feeding.stage==='return'?feeding.home:feeding.target;
+  if(feeding.stage==='eat'){reportMotion(false);return;}
+  const dx=goal.x-fx,dy=goal.y-fy,dist=Math.hypot(dx,dy);
+  if(dist<12){
+    win.setPosition(Math.round(goal.x),Math.round(goal.y));reportMotion(false);
+    if(feeding.stage==='chase'){feeding.stage='return';win.webContents.send('pet:feed:stage','grab',feeding.food);}
+    else {feeding.stage='eat';win.webContents.send('pet:feed:stage','eat',feeding.food);}
+    return;
+  }
+  const speed=feeding.stage==='chase'?440:190,step=Math.min(speed*dt,dist);
+  win.setPosition(Math.round(fx+dx/dist*step),Math.round(fy+dy/dist*step));reportMotion(true);return;
+ }
  if(activity==='toilet'){if(toiletUntil&&now>toiletUntil){toiletUntil=0;toiletTrip=false;toiletDue=now+rand(300000,720000);}reportMotion(false);return;}
  if(toiletUntil&&now<toiletUntil){reportMotion(false);return;}
  if(['feed','sleep','pet','play'].includes(activity)||now<manualPause){reportMotion(false);return;}
@@ -122,6 +137,7 @@ ipcMain.handle('pet:settings:set',(_event,patch)=>{
  if(!patch||typeof patch!=='object'||Array.isArray(patch))throw Error('Invalid settings');
  const keys=Object.keys(patch);
  if(!keys.length||keys.some(k=>!Object.hasOwn(defaults,k)))throw Error('Unknown setting');
+ if('activeFeed'in patch&&typeof patch.activeFeed!=='boolean')throw Error('Invalid activeFeed');
  if('toiletEnabled'in patch&&typeof patch.toiletEnabled!=='boolean')throw Error('Invalid toiletEnabled');
  if('toiletPosition'in patch&&patch.toiletPosition!==null&&(!Number.isFinite(patch.toiletPosition?.x)||!Number.isFinite(patch.toiletPosition?.y)))throw Error('Invalid toiletPosition');
  if('follow'in patch&&typeof patch.follow!=='boolean')throw Error('Invalid follow');
@@ -129,6 +145,7 @@ ipcMain.handle('pet:settings:set',(_event,patch)=>{
  if('scale'in patch&&(!Number.isInteger(patch.scale)||patch.scale<50||patch.scale>200))throw Error('Invalid scale');
  if('followDelay'in patch&&(!Number.isInteger(patch.followDelay)||patch.followDelay<0||patch.followDelay>1500))throw Error('Invalid followDelay');
  const oldScale=settings.scale;settings={...settings,...patch};save();
+ if(patch.activeFeed===false&&feeding){feeding=null;reportMotion(false);}
  if('toiletEnabled'in patch||'toiletPosition'in patch){toiletTrip=false;toiletUntil=0;toiletDue=Date.now()+rand(180000,420000);}
  if(oldScale!==settings.scale)resize();
  else {resetMovement();if(!settings.fullScreen){const [x,y]=win.getPosition(),p=clampPosition(x,y);win.setPosition(p.x,p.y);}}
@@ -139,6 +156,24 @@ ipcMain.handle('pet:toilet:set-current',()=>{
  if(!win)throw Error('Pet window unavailable');
  const [x,y]=win.getPosition();settings.toiletPosition={x,y};save();
  toiletTrip=false;toiletDue=Date.now()+rand(180000,420000);return {...settings};
+});
+ipcMain.handle('pet:feed:start',(_event,payload)=>{
+ if(!settings.activeFeed||feeding||!win) return {ok:false,reason:'disabled-or-busy'};
+ const food=String(payload?.food||'hay');
+ if(!['hay','orchard','alfalfa','pellet','carrot','leaf','apple','herb'].includes(food))throw Error('Invalid food');
+ const point=payload?.point;
+ if(!Number.isFinite(point?.x)||!Number.isFinite(point?.y))throw Error('Invalid feed point');
+ const display=nearestAllowed(point),rect=display.bounds,[w,h]=win.getSize();
+ const target=clampTo(rect,point.x-w/2,point.y-h/2);
+ const [x,y]=win.getPosition();
+ feeding={food,home:{x,y},target,stage:'chase'};
+ feedStart=Date.now();manualPause=0;toiletTrip=false;resetMovement();
+ win.webContents.send('pet:feed:stage','chase',food);
+ return {ok:true};
+});
+ipcMain.on('pet:feed:finish',()=>{
+ if(!feeding||feeding.stage!=='eat')return;
+ feeding=null;manualPause=Date.now()+1800;reportMotion(false);
 });
 ipcMain.on('pet:drag',(_event,delta)=>{
  if(!win||!Number.isFinite(delta?.x)||!Number.isFinite(delta?.y))return;
