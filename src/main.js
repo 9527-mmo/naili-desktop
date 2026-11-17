@@ -182,14 +182,14 @@ function beginFeed(food,point){
 function createPanel(){
  if(panel&&!panel.isDestroyed())return;
  const rect=screen.getPrimaryDisplay().workArea;
- panel=new BrowserWindow({width:420,height:235,x:rect.x+Math.max(0,rect.width-450),y:rect.y+Math.max(0,rect.height-260),frame:false,transparent:true,alwaysOnTop:true,resizable:false,skipTaskbar:true,hasShadow:false,webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false}});
+ panel=new BrowserWindow({width:420,height:280,x:rect.x+Math.max(0,rect.width-450),y:rect.y+Math.max(0,rect.height-305),frame:false,transparent:true,alwaysOnTop:true,resizable:false,skipTaskbar:true,hasShadow:false,webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false}});
  panel.loadFile(path.join(__dirname,'countdown.html'));
  panel.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true});
  panel.on('closed',()=>{panel=null;});
 }
 function syncPanel(){if(settings.panelVisible)createPanel();else if(panel){panel.close();}}
 function broadcastSettings(){for(const w of [win,panel])if(w&&!w.isDestroyed())w.webContents.send('pet:settings:changed',{...settings});}
-function movePanel(dx,dy){if(!panel)return;const [x,y]=panel.getPosition();const rect=screen.getDisplayNearestPoint({x,y}).workArea;panel.setPosition(clamp(Math.round(x+dx),rect.x,rect.x+rect.width-420),clamp(Math.round(y+dy),rect.y,rect.y+rect.height-235));}
+function movePanel(dx,dy){if(!panel)return;const [x,y]=panel.getPosition();const rect=screen.getDisplayNearestPoint({x,y}).workArea;panel.setPosition(clamp(Math.round(x+dx),rect.x,rect.x+rect.width-420),clamp(Math.round(y+dy),rect.y,rect.y+rect.height-280));}
 function createWindow(){
  const rect=screen.getPrimaryDisplay().workArea,[w,h]=size();
  win=new BrowserWindow({width:w,height:h,x:rect.x+Math.max(0,rect.width-w-30),y:rect.y+Math.max(0,rect.height-h-30),
