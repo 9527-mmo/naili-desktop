@@ -2,6 +2,8 @@
 const canvas=document.getElementById('pet'),ctx=canvas.getContext('2d');
 const status=document.getElementById('status');
 let activeCharacter=null;
+let gen1Motion=null;
+window.NailiGen1Motion?.load().then(pack=>{gen1Motion=pack;console.info('Gen 1 motion frames ready:',Object.keys(pack.actions));}).catch(e=>console.info('Gen 1 motion fallback:',e.message));
 window.CharacterPacks?.load('naili').then(pack=>{activeCharacter=pack;}).catch(()=>{console.info('Character PNGs pending; using Canvas prototype.');});
 const state={mode:'idle',until:0,blink:0,feedCount:0,drag:null,mouse:{x:360,y:350},last:performance.now(),food:0,reduceMotion:window.matchMedia('(prefers-reduced-motion: reduce)').matches};
 function say(s){status.textContent=s;status.classList.add('show');clearTimeout(say.timer);say.timer=setTimeout(()=>status.classList.remove('show'),1800);}
@@ -118,6 +120,12 @@ canvas.addEventListener('pointerdown',e=>{if(e.button!==0)return;state.drag={x:e
 canvas.addEventListener('pointermove',e=>{const d=state.drag;if(d){const x=e.screenX-d.x,y=e.screenY-d.y;if(Math.abs(x)+Math.abs(y)>2){window.naili?.drag(x,y);d.moved=true;}d.x=e.screenX;d.y=e.screenY;}const r=canvas.getBoundingClientRect();state.mouse={x:(e.clientX-r.left)*2,y:(e.clientY-r.top)*2};});
 canvas.addEventListener('pointerup',()=>{if(state.drag&&!state.drag.moved)action('pet',1800);state.drag=null;});
 canvas.addEventListener('dblclick',()=>action('feed',3200));
+// Manual visual QA: settings > motion test buttons (no system movement).
+document.querySelectorAll('[data-motion-test]').forEach(button=>button.addEventListener('click',()=>{
+ const name=button.dataset.motionTest;
+ timeline.enter(name,performance.now(),undefined,true);
+ say(({walk:'测试行走帧',run:'测试奔跑帧',turn:'测试转身帧'})[name]);
+}));
 function ellipse(x,y,rx,ry,fill,rot=0){ctx.beginPath();ctx.ellipse(x,y,rx,ry,rot,0,Math.PI*2);ctx.fillStyle=fill;ctx.fill();}
 function path(points,fill){ctx.beginPath();ctx.moveTo(...points[0]);for(let i=1;i<points.length;i++)ctx.lineTo(...points[i]);ctx.closePath();ctx.fillStyle=fill;ctx.fill();}
 function gradient(x,y,r,inner,outer){const g=ctx.createRadialGradient(x-r*.3,y-r*.3,r*.05,x,y,r);g.addColorStop(0,inner);g.addColorStop(1,outer);return g;}
@@ -127,8 +135,15 @@ function draw(t){
   state.mode=motion.name;
   if(state.reportedMode!==motion.name){state.reportedMode=motion.name;window.naili?.activity(motion.name);}
   ctx.clearRect(0,0,720,780);
-  if(activeCharacter){
-    const action=activeCharacter.actions[state.mode]||activeCharacter.actions.idle;
+  const gen1Action=gen1Motion?.actions[state.mode];
+  if(gen1Action){
+    const index=Math.floor((motion.elapsed%gen1Action.duration)/gen1Action.duration*gen1Action.images.length)%gen1Action.images.length;
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(gen1Action.images[index],56,72,608,608);
+    return;
+  }
+  if(activeCharacter&&activeCharacter.actions[state.mode]){
+    const action=activeCharacter.actions[state.mode];
     const index=Math.min(action.images.length-1,Math.floor(motion.phase*action.images.length));
     ctx.drawImage(action.images[index],0,0,720,780);
     return;
