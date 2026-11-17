@@ -5,15 +5,10 @@
 <main class="wood-panel" id="panel">
  <div class="roof"><span class="roof-flower">✿</span><div class="brand"><span class="brand-rabbit" aria-hidden="true">🐰</span><span><b>奶栗 <small>NAILI</small></b><em>下班计划 · PIXEL DAYS</em></span></div><div class="roof-buttons"><button id="config" title="设置" aria-label="设置">⚙</button><button id="minimize" title="隐藏面板" aria-label="隐藏面板">−</button></div></div>
  <div class="panel-inner">
-  <div class="date-row"><span id="date">--月--日 · 星期-</span><span class="mode-tag" id="mode-tag">WORK TIME</span></div>
   <div class="count-title"><span class="briefcase">▣</span><span id="count-label">距离下班还有</span></div>
   <div class="timer" aria-live="off"><span class="digit-pair" id="hours">00</span><span class="colon">:</span><span class="digit-pair" id="minutes">00</span><span class="colon">:</span><span class="digit-pair" id="seconds">00</span></div>
-  <div class="progress-title"><span>✦ 今日工作进度</span><span id="percent">0%</span></div>
-  <div class="progress-track" role="progressbar" aria-label="今日工作进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress"><div id="progress-fill"></div></div>
-  <div class="earnings"><div class="earning"><span>◈ 今日收入</span><strong id="today">¥ 0.00</strong></div><div class="earning"><span>▦ 本月累计</span><strong id="month">¥ 0.00</strong></div></div>
-  <div class="footer"><span id="schedule">09:00 - 18:00</span><span id="info">每秒更新 · 仅供参考</span></div>
+  <div class="earnings"><div class="earning"><span>◈ 今日收入</span><strong id="today">¥ 0.00</strong></div><div class="earning"><span>▦ 本月总收入</span><strong id="month">¥ 0.00</strong></div></div>
  </div>
- <div class="foot-plank"><span>✿</span><span>奶栗陪你，慢慢下班 ♡</span><span>✿</span></div>
 </main>
 <section class="settings" id="settings" hidden aria-label="倒计时设置"><div class="settings-head"><strong>⚙ 奶栗の时间设置</strong><button id="cancel" aria-label="关闭设置">×</button></div><div class="settings-grid"><label>上班时间<input id="start" type="time"></label><label>下班时间<input id="end" type="time"></label><label>月薪（元）<input id="salary" type="number" min="0" max="100000000" step="0.01"></label><label>计薪方式<select id="mode"><option value="work">按工作时间累计</option><option value="calendar">整月 24 小时均摊</option></select></label></div><p class="settings-note">目前按每天相同班次估算，不含节假日与休息日规则。</p><div class="settings-actions"><button id="save">保存设置 ✓</button></div></section>
 <script src="./countdown.js"></script></body></html>
