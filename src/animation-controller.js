@@ -3,7 +3,8 @@
  const definitions={
  idle:{duration:4400,loop:true,priority:0},
  walk:{duration:720,loop:true,priority:1},
- run:{duration:480,loop:true,priority:1},
+ run:{duration:600,loop:true,priority:1},
+ turn:{duration:960,loop:false,priority:2},
  feed:{duration:4200,loop:false,priority:3},
  sleep:{duration:9000,loop:false,priority:2},
  play:{duration:1800,loop:false,priority:3},
