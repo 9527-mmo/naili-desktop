@@ -1,10 +1,12 @@
 const {app,BrowserWindow,screen,ipcMain}=require('electron');
 const fs=require('fs'),path=require('path');
+const {spawn,spawnSync}=require('child_process');
+const os=require('os');
 const BASE={width:360,height:390};
 const defaults={follow:false,fullScreen:false,scale:100,followDelay:350,toiletEnabled:false,toiletPosition:null,activeFeed:false};
 let settings={...defaults},win,timer,activity='idle',roamTarget=null,nextRoam=0,roamPause=0,lastTick=0,manualPause=0;
 let toiletDue=Date.now()+240000,toiletTrip=false,toiletUntil=0;
-let feeding=null,feedStart=0;
+let feeding=null,feedStart=0,feedPicker=null,feedPoint=null,mouseMonitor=null,mouseBuffer='',lastRight=null;
 let cursorHistory=[],filteredTarget=null,moving=false,lastMovementReport=0;
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 const rand=(a,b)=>a+Math.random()*(b-a);
@@ -115,6 +117,66 @@ function tick(){
  const pos=settings.fullScreen?{x:Math.round(nx),y:Math.round(ny)}:clampTo(rectFor(screen.getPrimaryDisplay()),nx,ny);
  if(pos.x!==x||pos.y!==y){win.setPosition(pos.x,pos.y);reportMotion(true);}else reportMotion(false);
 }
+function openFeedPicker(point){
+ if(!settings.activeFeed||feeding||!win)return;
+ if(feedPicker&&!feedPicker.isDestroyed()){feedPicker.focus();return;}
+ feedPoint=point;
+ const display=screen.getDisplayNearestPoint(point),rect=display.workArea;
+ feedPicker=new BrowserWindow({width:240,height:190,frame:false,resizable:false,alwaysOnTop:true,show:false,
+  backgroundColor:'#fff9f0',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false}});
+ feedPicker.loadFile(path.join(__dirname,'feed-picker.html'));
+ const x=clamp(Math.round(point.x),rect.x,rect.x+rect.width-240);
+ const y=clamp(Math.round(point.y),rect.y,rect.y+rect.height-190);
+ feedPicker.setPosition(x,y);feedPicker.once('ready-to-show',()=>feedPicker?.show());
+ feedPicker.on('closed',()=>{feedPicker=null;feedPoint=null;});
+}
+function rightClick(point,now=Date.now()){
+ if(!settings.activeFeed||feeding)return;
+ if(lastRight&&now-lastRight.time<=430&&Math.hypot(point.x-lastRight.x,point.y-lastRight.y)<36){
+  lastRight=null;openFeedPicker(point);
+ }else lastRight={...point,time:now};
+}
+function startMouseMonitor(){
+ if(process.platform!=='darwin'||mouseMonitor)return;
+ const source=path.join(__dirname,'..','native','RightClickMonitor.swift');
+ const bin=path.join(app.getPath('userData'),'naili-right-click-monitor');
+ try{
+  const sourceMtime=fs.statSync(source).mtimeMs;
+  if(!fs.existsSync(bin)||fs.statSync(bin).mtimeMs<sourceMtime){
+   const build=spawnSync('xcrun',['swiftc',source,'-o',bin],{timeout:90000,encoding:'utf8'});
+   if(build.error||build.status!==0){console.warn('Global monitor compile failed',build.stderr||build.error);return;}
+  }
+  mouseMonitor=spawn(bin,[],{stdio:['ignore','pipe','pipe']});
+  mouseMonitor.stdout.on('data',chunk=>{
+   mouseBuffer+=chunk.toString();
+   let n;while((n=mouseBuffer.indexOf('\n'))>=0){
+    const line=mouseBuffer.slice(0,n);mouseBuffer=mouseBuffer.slice(n+1);
+    try{
+     const event=JSON.parse(line),primary=screen.getPrimaryDisplay().bounds;
+     // Cocoa reports global bottom-left coordinates; Electron uses top-left.
+     const point={x:Math.round(event.x),y:Math.round(primary.y+primary.height-event.y)};
+     rightClick(point,Math.round(event.timestamp*1000));
+    }catch{}
+   }
+  });
+  mouseMonitor.stderr.on('data',v=>console.warn('Global mouse monitor:',String(v)));
+  mouseMonitor.on('error',e=>console.warn('Global mouse monitor unavailable:',e.message));
+  mouseMonitor.on('exit',()=>{mouseMonitor=null;});
+ }catch(e){console.warn('Unable to start mouse monitor',e);}
+}
+function stopMouseMonitor(){if(mouseMonitor){mouseMonitor.kill();mouseMonitor=null;}lastRight=null;}
+function beginFeed(food,point){
+ if(!settings.activeFeed||feeding||!win)return {ok:false,reason:'disabled-or-busy'};
+ if(!['hay','orchard','alfalfa','pellet','carrot','leaf','apple','herb'].includes(food))throw Error('Invalid food');
+ if(!Number.isFinite(point?.x)||!Number.isFinite(point?.y))throw Error('Invalid feed point');
+ const display=screen.getDisplayNearestPoint(point),rect=display.bounds,[w,h]=win.getSize();
+ const target=clampTo(rect,point.x-w/2,point.y-h/2);
+ const [x,y]=win.getPosition();
+ feeding={food,home:{x,y},target,stage:'chase'};
+ feedStart=Date.now();manualPause=0;toiletTrip=false;resetMovement();
+ win.webContents.send('pet:feed:stage','chase',food);
+ return {ok:true};
+}
 function createWindow(){
  const rect=screen.getPrimaryDisplay().workArea,[w,h]=size();
  win=new BrowserWindow({width:w,height:h,x:rect.x+Math.max(0,rect.width-w-30),y:rect.y+Math.max(0,rect.height-h-30),
@@ -128,6 +190,7 @@ function createWindow(){
 app.whenReady().then(()=>{
  try{settings=normalize(JSON.parse(fs.readFileSync(settingsFile(),'utf8')));}catch{settings={...defaults};}
  createWindow();
+ if(settings.activeFeed)startMouseMonitor();
  screen.on('display-removed',()=>{if(win){const [x,y]=win.getPosition(),p=clampPosition(x,y);win.setPosition(p.x,p.y);resetMovement();}});
  app.on('activate',()=>{if(!BrowserWindow.getAllWindows().length)createWindow();});
 });
@@ -146,6 +209,7 @@ ipcMain.handle('pet:settings:set',(_event,patch)=>{
  if('followDelay'in patch&&(!Number.isInteger(patch.followDelay)||patch.followDelay<0||patch.followDelay>1500))throw Error('Invalid followDelay');
  const oldScale=settings.scale;settings={...settings,...patch};save();
  if(patch.activeFeed===false&&feeding){feeding=null;reportMotion(false);}
+ if('activeFeed'in patch){if(settings.activeFeed)startMouseMonitor();else {stopMouseMonitor();if(feedPicker)feedPicker.close();}}
  if('toiletEnabled'in patch||'toiletPosition'in patch){toiletTrip=false;toiletUntil=0;toiletDue=Date.now()+rand(180000,420000);}
  if(oldScale!==settings.scale)resize();
  else {resetMovement();if(!settings.fullScreen){const [x,y]=win.getPosition(),p=clampPosition(x,y);win.setPosition(p.x,p.y);}}
@@ -157,20 +221,12 @@ ipcMain.handle('pet:toilet:set-current',()=>{
  const [x,y]=win.getPosition();settings.toiletPosition={x,y};save();
  toiletTrip=false;toiletDue=Date.now()+rand(180000,420000);return {...settings};
 });
-ipcMain.handle('pet:feed:start',(_event,payload)=>{
- if(!settings.activeFeed||feeding||!win) return {ok:false,reason:'disabled-or-busy'};
- const food=String(payload?.food||'hay');
- if(!['hay','orchard','alfalfa','pellet','carrot','leaf','apple','herb'].includes(food))throw Error('Invalid food');
- const point=payload?.point;
- if(!Number.isFinite(point?.x)||!Number.isFinite(point?.y))throw Error('Invalid feed point');
- const display=nearestAllowed(point),rect=display.bounds,[w,h]=win.getSize();
- const target=clampTo(rect,point.x-w/2,point.y-h/2);
- const [x,y]=win.getPosition();
- feeding={food,home:{x,y},target,stage:'chase'};
- feedStart=Date.now();manualPause=0;toiletTrip=false;resetMovement();
- win.webContents.send('pet:feed:stage','chase',food);
- return {ok:true};
+ipcMain.handle('pet:feed:start',(_event,payload)=>beginFeed(String(payload?.food||'hay'),payload?.point));
+ipcMain.on('pet:feed:global-confirm',(event,food)=>{
+ if(!feedPicker||event.sender!==feedPicker.webContents||!feedPoint)return;
+ const point={...feedPoint};feedPicker.close();beginFeed(String(food),point);
 });
+ipcMain.on('pet:feed:global-cancel',event=>{if(feedPicker&&event.sender===feedPicker.webContents)feedPicker.close();});
 ipcMain.on('pet:feed:finish',()=>{
  if(!feeding||feeding.stage!=='eat')return;
  feeding=null;manualPause=Date.now()+1800;reportMotion(false);
@@ -183,4 +239,5 @@ ipcMain.on('pet:drag',(_event,delta)=>{
 });
 ipcMain.on('pet:toilet:finished',()=>{toiletTrip=false;toiletUntil=0;toiletDue=Date.now()+rand(300000,720000);});
 ipcMain.on('pet:activity',(_event,value)=>{if(['idle','feed','sleep','pet','play','curious','walk','run'].includes(value))activity=value;});
+app.on('before-quit',stopMouseMonitor);
 ipcMain.on('pet:quit',()=>app.quit());
