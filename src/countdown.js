@@ -37,13 +37,8 @@ function render(){
  if(!settings)return;
  const now=new Date(),v=calculate(now,settings),sec=v.remaining;
  $('count-label').textContent=v.working?'距离下班还有':'休息中 · 距离上班';
- $('mode-tag').textContent=v.working?'WORK TIME':'REST TIME';
- $('date').textContent=(now.getMonth()+1)+'月'+now.getDate()+'日 · 星期'+'日一二三四五六'[now.getDay()];
  $('hours').textContent=pad(Math.floor(sec/3600));$('minutes').textContent=pad(Math.floor(sec%3600/60));$('seconds').textContent=pad(sec%60);
- $('percent').textContent=Math.floor(v.progress)+'%';$('progress-fill').style.width=v.progress+'%';$('progress').setAttribute('aria-valuenow',String(Math.floor(v.progress)));
  $('today').textContent=money(v.today);$('month').textContent=money(v.accrued);
- $('schedule').textContent=settings.workStart+' - '+settings.workEnd;
- $('info').textContent=(settings.salaryMode==='calendar'?'整月均摊':'每日排班均摊')+' · 仅供参考';
 }
 async function refresh(){settings=await window.naili.getSettings();render();}
 $('config').onclick=()=>{if(!settings)return;$('start').value=settings.workStart;$('end').value=settings.workEnd;$('salary').value=settings.monthlySalary;$('mode').value=settings.salaryMode;$('settings').hidden=false;};
