@@ -1,0 +1,14 @@
+{
+  "name": "naili-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "奶栗桌面宠物",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.4.11"
+  }
+}
