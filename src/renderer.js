@@ -9,6 +9,44 @@ const timeline=window.NailiAnimation.create();
 const foods=['hay','orchard','alfalfa','pellet','carrot','leaf','apple','herb'];
 const foodLabels={hay:'提摩西草',orchard:'果园草',alfalfa:'苜蓿草',pellet:'兔粮',carrot:'胡萝卜',leaf:'叶菜',apple:'苹果',herb:'香草'};
 const foodChoice=document.getElementById('food-choice');
+const activeFeedToggle=document.getElementById('active-feed-toggle');
+const feedMenu=document.getElementById('feed-menu');
+const feedMenuChoice=document.getElementById('feed-menu-choice');
+let feedPoint=null,feedEnd=0,feedStage='';
+activeFeedToggle.addEventListener('change',async()=>{
+ try{const v=await window.naili.setSettings({activeFeed:activeFeedToggle.checked});activeFeedToggle.checked=v.activeFeed;}
+ catch{activeFeedToggle.checked=!activeFeedToggle.checked;say('主动投喂设置失败');}
+});
+window.naili?.getSettings().then(v=>{activeFeedToggle.checked=v.activeFeed;}).catch(console.warn);
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+let lastRightClick=0;
+canvas.addEventListener('pointerdown',e=>{
+ if(e.button!==2)return;
+ const now=performance.now();
+ if(activeFeedToggle.checked&&now-lastRightClick<420){
+  feedPoint={x:e.screenX,y:e.screenY};
+  feedMenuChoice.value=foodChoice.value;feedMenu.hidden=false;
+  lastRightClick=0;
+ }else lastRightClick=now;
+});
+document.getElementById('feed-cancel').addEventListener('click',()=>{feedMenu.hidden=true;});
+document.getElementById('feed-confirm').addEventListener('click',async()=>{
+ if(!feedPoint)return;
+ const food=feedMenuChoice.value;
+ try{
+  const result=await window.naili.startActiveFeed(food,feedPoint);
+  if(!result.ok){say('奶栗暂时忙着呢');return;}
+  foodChoice.value=food;state.food=Math.max(0,foods.indexOf(food));feedMenu.hidden=true;
+ }catch{say('投喂启动失败');}
+});
+window.naili?.onFeedStage((stage,food)=>{
+ feedStage=stage;state.food=Math.max(0,foods.indexOf(food));
+ const now=performance.now();
+ if(stage==='chase'){timeline.enter('run',now,undefined,true);say('发现食物！');}
+ else if(stage==='grab'){timeline.enter('curious',now,1800,true);say('叼到了！带回去吃');}
+ else if(stage==='eat'){timeline.enter('feed',now,4500,true);feedEnd=now+4500;say('咔嚓咔嚓～');}
+});
+
 const toiletToggle=document.getElementById('toilet-toggle');
 const toiletStatus=document.getElementById('toilet-status');
 const setToiletButton=document.getElementById('set-toilet');
@@ -74,7 +112,7 @@ function ambient(now){
 }
 function action(mode,duration=2400){lastManual=performance.now();behavior.request(mode,lastManual,duration);if(mode==='feed'){state.food=Math.max(0,foods.indexOf(foodChoice.value));state.feedCount++;}state.mode=mode;state.until=performance.now()+duration;timeline.enter(mode,performance.now(),duration);say(({feed:'咔嚓！今天吃'+foodLabels[foods[state.food]]+'！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.action;if(a==='quit')window.naili?.quit();else action(a,a==='sleep'?6500:3000);}));
-canvas.addEventListener('pointerdown',e=>{state.drag={x:e.screenX,y:e.screenY,moved:false};canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointerdown',e=>{if(e.button!==0)return;state.drag={x:e.screenX,y:e.screenY,moved:false};canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointermove',e=>{const d=state.drag;if(d){const x=e.screenX-d.x,y=e.screenY-d.y;if(Math.abs(x)+Math.abs(y)>2){window.naili?.drag(x,y);d.moved=true;}d.x=e.screenX;d.y=e.screenY;}const r=canvas.getBoundingClientRect();state.mouse={x:(e.clientX-r.left)*2,y:(e.clientY-r.top)*2};});
 canvas.addEventListener('pointerup',()=>{if(state.drag&&!state.drag.moved)action('pet',1800);state.drag=null;});
 canvas.addEventListener('dblclick',()=>action('feed',3200));
@@ -140,8 +178,9 @@ function draw(t){
   ctx.restore();
 }
 function frame(now){
+ if(feedEnd&&now>=feedEnd){feedEnd=0;feedStage='';window.naili?.finishActiveFeed();}
  if(toiletEnd&&now>=toiletEnd){toiletEnd=0;window.naili?.toiletFinished();}
- if(!timeline.locked&&!state.drag){
+ if(!timeline.locked&&!state.drag&&!feedStage){
   if(walking&&now-motionChanged>180&&timeline.name!=='walk'){if(timeline.enter('walk',now))lastWalkStart=now;}
   else if(!walking&&timeline.name==='walk'&&now-motionChanged>500&&now-lastWalkStart>850){
    timeline.enter('idle',now,undefined,true);nextAmbient=Math.max(nextAmbient,now+2200);
