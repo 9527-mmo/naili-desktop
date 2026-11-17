@@ -44,6 +44,8 @@ window.naili?.onFeedStage((stage,food)=>{
  const now=performance.now();
  if(stage==='chase'){timeline.enter('run',now,undefined,true);say('发现食物！');}
  else if(stage==='grab'){timeline.enter('grab',now,1000,true);say('叼到了！带回去吃');}
+ else if(stage==='carry'){timeline.enter('carry',now,undefined,true);}
+ else if(stage==='cancel'){feedEnd=0;feedStage='';timeline.enter('idle',now,undefined,true);say('下次再吃吧');}
  else if(stage==='eat'){timeline.enter('chew',now,4500,true);feedEnd=now+4500;say('咔嚓咔嚓～');}
 });
 
