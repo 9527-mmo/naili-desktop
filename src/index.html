@@ -1,6 +1,6 @@
-<!doctype html>
-<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>奶栗桌面宠物</title><link rel="stylesheet" href="./style.css"></head>
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>奶栗桌面宠物</title><link rel="stylesheet" href="./style.css"></head>
 <body><div id="app"><canvas id="pet" width="720" height="780" aria-label="奶栗兔子"></canvas>
-<div id="toolbar"><button data-action="feed" title="喂胡萝卜">🥕</button><button data-action="pet" title="摸摸">🤍</button><button data-action="sleep" title="睡觉">🌙</button><button data-action="play" title="玩耍">✨</button><button data-action="quit" title="退出">×</button></div>
-<div id="status" role="status" aria-live="polite">奶栗来啦！</div></div><script src="./animation-controller.js"></script><script src="./character-loader.js"></script><script src="./renderer.js"></script></body></html>
+<div id="toolbar"><button data-action="feed" title="喂食">🥕</button><button data-action="pet" title="摸摸">🤍</button><button data-action="sleep" title="睡觉">🌙</button><button data-action="play" title="玩耍">✨</button><button id="settings-toggle" title="设置" aria-expanded="false">⚙️</button><button data-action="quit" title="退出">×</button></div>
+<section id="settings" hidden aria-label="宠物设置"><label><input id="follow-toggle" type="checkbox"> 跟随鼠标</label><p id="follow-description">关闭后奶栗会随机探索桌面</p></section>
+<div id="status" role="status" aria-live="polite">奶栗来啦！</div></div>
+<script src="./animation-controller.js"></script><script src="./character-loader.js"></script><script src="./renderer.js"></script></body></html>
