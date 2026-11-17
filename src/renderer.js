@@ -125,9 +125,9 @@ function ambient(now){
  const decision=behavior.tick(now);
  if(decision.changed&&decision.mode!=='idle')timeline.enter(decision.mode,now);
 }
-function action(mode,duration=2400){lastManual=performance.now();behavior.request(mode,lastManual,duration);if(mode==='feed'||mode==='chew'){state.food=Math.max(0,foods.indexOf(foodChoice.value));state.feedCount++;}state.mode=mode;state.until=performance.now()+duration;timeline.enter(mode,performance.now(),duration);say(({feed:'咔嚓！今天吃'+foodLabels[foods[state.food]]+'！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
+function action(mode,duration=2400){roofPose='none';roofPoseUntil=performance.now()+duration+1800;lastManual=performance.now();behavior.request(mode,lastManual,duration);if(mode==='feed'||mode==='chew'){state.food=Math.max(0,foods.indexOf(foodChoice.value));state.feedCount++;}state.mode=mode;state.until=performance.now()+duration;timeline.enter(mode,performance.now(),duration);say(({feed:'咔嚓！今天吃'+foodLabels[foods[state.food]]+'！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.action;if(a==='quit')window.naili?.quit();else action(a,a==='sleep'?6500:3000);}));
-canvas.addEventListener('pointerdown',e=>{if(e.button!==0)return;state.drag={x:e.screenX,y:e.screenY,moved:false};canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointerdown',e=>{if(e.button!==0)return;if(roofState==='resting'&&['roofSit','roofLie','sleep'].includes(timeline.name)){roofPose='none';roofPoseUntil=performance.now()+4500;timeline.enter('roofWake',performance.now(),950,true);}state.drag={x:e.screenX,y:e.screenY,moved:false};canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointermove',e=>{const d=state.drag;if(d){const x=e.screenX-d.x,y=e.screenY-d.y;if(Math.abs(x)+Math.abs(y)>2){window.naili?.drag(x,y);d.moved=true;}d.x=e.screenX;d.y=e.screenY;}const r=canvas.getBoundingClientRect();state.mouse={x:(e.clientX-r.left)*2,y:(e.clientY-r.top)*2};});
 canvas.addEventListener('pointerup',()=>{if(state.drag&&!state.drag.moved)action('pet',1800);state.drag=null;});
 canvas.addEventListener('dblclick',()=>action('feed',3200));
@@ -234,7 +234,8 @@ function frame(now){
  }
  const roofCanRest=roofState==='resting'&&!walking&&!feedStage&&!state.drag&&!toiletEnd&&now-lastManual>4500;
  if(roofCanRest){
-  if(now>=roofPoseUntil&&roofPose==='sit'){
+  if(roofPose==='none'&&now>=roofPoseUntil){roofPose='sit';roofPoseUntil=now+3000;timeline.enter('roofSit',now,undefined,true);}
+  else if(now>=roofPoseUntil&&roofPose==='sit'){
    roofPose='lie';roofPoseUntil=now+6500;
    timeline.enter('roofLie',now,undefined,true);
   }else if(now>=roofPoseUntil&&roofPose==='lie'){
