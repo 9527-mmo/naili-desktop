@@ -1,60 +1,58 @@
-/* Retro countdown: daily repeating shift; local time; no network. */
+/* Naili compact countdown. Uses system-local clock; no external data. */
 const $=id=>document.getElementById(id);
-let settings=null;
-const money=n=>'¥ '+Math.max(0,n).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+let settings=null,dragging=null;
 const pad=n=>String(n).padStart(2,'0');
-function shiftFor(date,hhmm){
- const [h,m]=hhmm.split(':').map(Number);const d=new Date(date);d.setHours(h,m,0,0);return d;
-}
+const money=n=>'¥ '+Math.max(0,n).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+function at(date,hhmm){const [h,m]=hhmm.split(':').map(Number),d=new Date(date);d.setHours(h,m,0,0);return d;}
+function bounds(date,s){const a=at(date,s.workStart),b=at(date,s.workEnd);if(b<=a)b.setDate(b.getDate()+1);return {a,b};}
 function calculate(now,s){
- const start=shiftFor(now,s.workStart),end=shiftFor(now,s.workEnd);
- if(end<=start)end.setDate(end.getDate()+1);
- const priorStart=new Date(start);priorStart.setDate(priorStart.getDate()-1);
- const priorEnd=new Date(end);priorEnd.setDate(priorEnd.getDate()-1);
- let currentStart=start,currentEnd=end;
- if(now<start&&now<priorEnd){currentStart=priorStart;currentEnd=priorEnd;}
- const working=now>=currentStart&&now<currentEnd;
- let target,rest=false;
- if(working)target=currentEnd;
- else{rest=true;target=now<end?end:new Date(end.getTime()+86400000);if(now<start)target=end;}
- // If off shift, count down to the next shift's end (daily schedule).
- const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
- const monthStart=new Date(now.getFullYear(),now.getMonth(),1);
- let accrued=0,today=0;
+ const current=bounds(now,s),previous=bounds(new Date(now.getFullYear(),now.getMonth(),now.getDate()-1),s);
+ const active=now>=current.a&&now<current.b?current:now>=previous.a&&now<previous.b?previous:null;
+ const next=active?active.b:now<current.a?current.a:new Date(current.a.getTime()+86400000);
+ const progress=active?Math.max(0,Math.min(100,(now-active.a)/(active.b-active.a)*100)):0;
+ const monthStart=new Date(now.getFullYear(),now.getMonth(),1),monthEnd=new Date(now.getFullYear(),now.getMonth()+1,1);
+ let today=0,accrued=0;
  if(s.salaryMode==='calendar'){
-  const monthMs=new Date(now.getFullYear(),now.getMonth()+1,1)-monthStart;
-  accrued=s.monthlySalary*(now-monthStart)/monthMs;
-  const todayStart=new Date(now);todayStart.setHours(0,0,0,0);
-  today=s.monthlySalary*(now-todayStart)/monthMs;
+  const ms=monthEnd-monthStart,dayStart=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  today=s.monthlySalary*(now-dayStart)/ms;
+  accrued=s.monthlySalary*(now-monthStart)/ms;
  }else{
-  // Daily shift assumption; workdays are every calendar day.
-  const shiftMs=end-start;
-  const daily=s.monthlySalary/daysInMonth;
+  const days=new Date(now.getFullYear(),now.getMonth()+1,0).getDate(),daily=s.monthlySalary/days;
+  // Include all scheduled shifts starting this month, even if yesterday's shift crosses midnight.
   for(let day=1;day<=now.getDate();day++){
-   const date=new Date(now.getFullYear(),now.getMonth(),day);
-   const a=shiftFor(date,s.workStart),b=shiftFor(date,s.workEnd);if(b<=a)b.setDate(b.getDate()+1);
-   const fraction=Math.max(0,Math.min(1,(now-a)/(b-a)));
+   const shift=bounds(new Date(now.getFullYear(),now.getMonth(),day),s);
+   const fraction=Math.max(0,Math.min(1,(now-shift.a)/(shift.b-shift.a)));
    accrued+=daily*fraction;
    if(day===now.getDate())today=daily*fraction;
   }
+  // A night shift started yesterday may still be earning today.
+  if(active&&active.a.getDate()!==now.getDate()){
+   const dailyMs=active.b-active.a;
+   today=daily*Math.max(0,(now-new Date(now.getFullYear(),now.getMonth(),now.getDate()))/dailyMs);
+  }
  }
- return {remaining:Math.max(0,Math.ceil((target-now)/1000)),working,today,accrued};
+ return {working:!!active,remaining:Math.max(0,Math.ceil((next-now)/1000)),progress,today,accrued};
 }
 function render(){
  if(!settings)return;
- const v=calculate(new Date(),settings);
- $('count-label').textContent=v.working?'距离下班':'休息中 · 距下次下班';
- const sec=v.remaining;$('count').textContent=[Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(pad).join(':');
+ const now=new Date(),v=calculate(now,settings),sec=v.remaining;
+ $('count-label').textContent=v.working?'距离下班还有':'休息中 · 距离上班';
+ $('mode-tag').textContent=v.working?'WORK TIME':'REST TIME';
+ $('date').textContent=(now.getMonth()+1)+'月'+now.getDate()+'日 · 星期'+'日一二三四五六'[now.getDay()];
+ $('hours').textContent=pad(Math.floor(sec/3600));$('minutes').textContent=pad(Math.floor(sec%3600/60));$('seconds').textContent=pad(sec%60);
+ $('percent').textContent=Math.floor(v.progress)+'%';$('progress-fill').style.width=v.progress+'%';$('progress').setAttribute('aria-valuenow',String(Math.floor(v.progress)));
  $('today').textContent=money(v.today);$('month').textContent=money(v.accrued);
- $('info').textContent=(settings.salaryMode==='calendar'?'整月均摊':'每日排班均摊')+' · 每秒更新 · 仅供参考';
+ $('schedule').textContent=settings.workStart+' - '+settings.workEnd;
+ $('info').textContent=(settings.salaryMode==='calendar'?'整月均摊':'每日排班均摊')+' · 仅供参考';
 }
 async function refresh(){settings=await window.naili.getSettings();render();}
 $('config').onclick=()=>{if(!settings)return;$('start').value=settings.workStart;$('end').value=settings.workEnd;$('salary').value=settings.monthlySalary;$('mode').value=settings.salaryMode;$('settings').hidden=false;};
 $('cancel').onclick=()=>$('settings').hidden=true;
-$('save').onclick=async()=>{try{settings=await window.naili.setSettings({workStart:$('start').value,workEnd:$('end').value,monthlySalary:Number($('salary').value),salaryMode:$('mode').value});$('settings').hidden=true;render();}catch(e){alert('保存失败：'+e.message);}};
-let dragging=null;
-$('panel').addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;dragging={x:e.screenX,y:e.screenY};});
+$('minimize').onclick=async()=>{try{await window.naili.setSettings({panelVisible:false});}catch(e){console.warn(e);}};
+$('save').onclick=async()=>{try{settings=await window.naili.setSettings({workStart:$('start').value,workEnd:$('end').value,monthlySalary:Number($('salary').value),salaryMode:$('mode').value});$('settings').hidden=true;render();}catch(e){window.alert('保存失败：'+e.message);}};
+$('panel').addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button,input,select'))return;dragging={x:e.screenX,y:e.screenY};});
 window.addEventListener('pointermove',e=>{if(!dragging)return;window.naili.dragPanel(e.screenX-dragging.x,e.screenY-dragging.y);dragging={x:e.screenX,y:e.screenY};});
 window.addEventListener('pointerup',()=>dragging=null);
+window.addEventListener('blur',()=>dragging=null);
 window.naili.onSettingsChanged(v=>{settings=v;render();});
 refresh().catch(console.error);setInterval(render,1000);
