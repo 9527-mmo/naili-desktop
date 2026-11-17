@@ -50,6 +50,7 @@ function ear(x,y,angle,wiggle){ctx.save();ctx.translate(x,y);ctx.rotate(angle+wi
 function draw(t){
   const motion=timeline.sample(t);
   state.mode=motion.name;
+  if(state.reportedMode!==motion.name){state.reportedMode=motion.name;window.naili?.activity(motion.name);}
   ctx.clearRect(0,0,720,780);
   if(activeCharacter){
     const action=activeCharacter.actions[state.mode]||activeCharacter.actions.idle;
