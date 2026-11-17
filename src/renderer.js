@@ -12,7 +12,7 @@ const foodChoice=document.getElementById('food-choice');
 const activeFeedToggle=document.getElementById('active-feed-toggle');
 const feedMenu=document.getElementById('feed-menu');
 const feedMenuChoice=document.getElementById('feed-menu-choice');
-let feedPoint=null,feedEnd=0,feedStage='';
+let feedPoint=null,feedEnd=0,feedStage='',feedStageStart=0;
 activeFeedToggle.addEventListener('change',async()=>{
  try{const v=await window.naili.setSettings({activeFeed:activeFeedToggle.checked});activeFeedToggle.checked=v.activeFeed;}
  catch{activeFeedToggle.checked=!activeFeedToggle.checked;say('主动投喂设置失败');}
@@ -40,11 +40,11 @@ document.getElementById('feed-confirm').addEventListener('click',async()=>{
  }catch{say('投喂启动失败');}
 });
 window.naili?.onFeedStage((stage,food)=>{
- feedStage=stage;state.food=Math.max(0,foods.indexOf(food));
+ feedStage=stage;feedStageStart=performance.now();state.food=Math.max(0,foods.indexOf(food));
  const now=performance.now();
  if(stage==='chase'){timeline.enter('run',now,undefined,true);say('发现食物！');}
- else if(stage==='grab'){timeline.enter('curious',now,1800,true);say('叼到了！带回去吃');}
- else if(stage==='eat'){timeline.enter('feed',now,4500,true);feedEnd=now+4500;say('咔嚓咔嚓～');}
+ else if(stage==='grab'){timeline.enter('grab',now,1000,true);say('叼到了！带回去吃');}
+ else if(stage==='eat'){timeline.enter('chew',now,4500,true);feedEnd=now+4500;say('咔嚓咔嚓～');}
 });
 
 const toiletToggle=document.getElementById('toilet-toggle');
@@ -106,11 +106,11 @@ const behavior=window.NailiBehavior.create();
 let lastManual=0;
 function ambient(now){
  behavior.setMoving(walking||Boolean(state.drag),now);
- if(now-lastManual<5000||state.drag||walking||timeline.name==='toilet')return;
+ if(now-lastManual<5000||state.drag||walking||feedStage||toiletEnd||timeline.name==='toilet')return;
  const decision=behavior.tick(now);
  if(decision.changed&&decision.mode!=='idle')timeline.enter(decision.mode,now);
 }
-function action(mode,duration=2400){lastManual=performance.now();behavior.request(mode,lastManual,duration);if(mode==='feed'){state.food=Math.max(0,foods.indexOf(foodChoice.value));state.feedCount++;}state.mode=mode;state.until=performance.now()+duration;timeline.enter(mode,performance.now(),duration);say(({feed:'咔嚓！今天吃'+foodLabels[foods[state.food]]+'！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
+function action(mode,duration=2400){lastManual=performance.now();behavior.request(mode,lastManual,duration);if(mode==='feed'||mode==='chew'||carrying){state.food=Math.max(0,foods.indexOf(foodChoice.value));state.feedCount++;}state.mode=mode;state.until=performance.now()+duration;timeline.enter(mode,performance.now(),duration);say(({feed:'咔嚓！今天吃'+foodLabels[foods[state.food]]+'！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.action;if(a==='quit')window.naili?.quit();else action(a,a==='sleep'?6500:3000);}));
 canvas.addEventListener('pointerdown',e=>{if(e.button!==0)return;state.drag={x:e.screenX,y:e.screenY,moved:false};canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointermove',e=>{const d=state.drag;if(d){const x=e.screenX-d.x,y=e.screenY-d.y;if(Math.abs(x)+Math.abs(y)>2){window.naili?.drag(x,y);d.moved=true;}d.x=e.screenX;d.y=e.screenY;}const r=canvas.getBoundingClientRect();state.mouse={x:(e.clientX-r.left)*2,y:(e.clientY-r.top)*2};});
@@ -132,10 +132,12 @@ function draw(t){
     return;
   }
   const mode=state.mode;
-  const gait=mode==='walk'?Math.sin(motion.phase*Math.PI*2):0;
-  const bounce=state.reduceMotion?0:(mode==='play'?Math.abs(Math.sin(t*.009))*40:mode==='walk'?Math.abs(gait)*7:Math.sin(t*.0028)*5);
-  const chew=state.reduceMotion?0:(mode==='feed'?Math.sin(t*.025)*7:0);
+  const gait=(mode==='walk'||mode==='run'||mode==='carry')?Math.sin(motion.phase*Math.PI*(mode==='run'?6:4)):0;
+  const bounce=state.reduceMotion?0:(mode==='play'?Math.abs(Math.sin(t*.009))*40:mode==='run'?Math.abs(gait)*18:mode==='walk'||mode==='carry'?Math.abs(gait)*7:Math.sin(t*.0028)*5);
+  const chew=state.reduceMotion?0:(mode==='feed'||mode==='chew'?Math.sin(t*.025)*7:0);
   const sleepy=mode==='sleep';
+  const sniffing=mode==='sniff'||mode==='grab';
+  const carrying=mode==='carry'||(feedStage==='grab'&&mode!=='grab');
   const wag=state.reduceMotion?0:Math.sin(t*.004)*.045;
   ctx.save();ctx.translate(0,-bounce);
   ellipse(358,688+bounce,175,23,'#735a4530');
@@ -154,7 +156,7 @@ function draw(t){
   if(sleepy||(mode==='toilet'&&motion.phase>.25&&motion.phase<.8)||Math.sin(t*.0015)> .995){ctx.strokeStyle='#563c32';ctx.lineWidth=8;ctx.lineCap='round';for(const x of [295,426]){ctx.beginPath();ctx.moveTo(x-16,eyeY);ctx.quadraticCurveTo(x,eyeY+11,x+16,eyeY);ctx.stroke();}}
   else {for(const x of [295,426]){ellipse(x,eyeY,13,19,'#352b29');ellipse(x-4,eyeY-6,4,6,'#fffaf2');}}
   ellipse(360,445,65,49,'#fff4e7');ellipse(339,455,36,27,'#fff8ef');ellipse(382,455,36,27,'#fff8ef');
-  ellipse(360,433,13,9,'#ba7f7a');
+  ellipse(360,433+(sniffing?Math.sin(t*.026)*5:0),13,9,'#ba7f7a');
   ctx.strokeStyle='#845b4e';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(360,441);ctx.lineTo(360,451);ctx.quadraticCurveTo(348,466,339,452);ctx.moveTo(360,451);ctx.quadraticCurveTo(372,466,382,452);ctx.stroke();
   if(mode==='toilet'){
     const p=motion.phase;
@@ -164,7 +166,7 @@ function draw(t){
     if(p>.78){ctx.font='bold 27px sans-serif';ctx.fillStyle='#d38e95';ctx.fillText('♡',494,320);}
   }
   if(mode==='feed'){
-    ctx.save();ctx.translate(405,505+chew);ctx.rotate(-.4);
+    ctx.save();ctx.translate(carrying?360:405,carrying?470:505+chew);ctx.rotate(carrying?0:-.4);if(carrying)ctx.scale(.55,.55);
     const food=foods[state.food];
     if(food==='carrot'){path([[0,0],[29,-15],[24,70],[12,93],[-2,68]],'#f68b32');path([[8,-4],[-10,-32],[15,-19],[23,-45],[29,-12]],'#6ba75c');}
     else if(food==='leaf'){ellipse(12,22,29,57,'#78b96b',-.35);ctx.strokeStyle='#438a43';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(6,70);ctx.lineTo(17,-19);ctx.stroke();}
@@ -173,6 +175,8 @@ function draw(t){
     else {for(let i=0;i<7;i++){ctx.strokeStyle=food==='alfalfa'?'#75a55d':food==='herb'?'#5f9950':i%2?'#bca35d':'#d5ba70';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-20+i*9,65);ctx.quadraticCurveTo(12+i*2,17,-10+i*8,-35);ctx.stroke();}}
     ctx.restore();
   }
+  if(mode==='grab'){ctx.save();ctx.globalAlpha=.75;ctx.font='bold 36px sans-serif';ctx.fillStyle='#b17c54';ctx.fillText('!',495,305);ctx.restore();}
+  if(mode==='groom'){ctx.save();ctx.globalAlpha=.85;ellipse(315+Math.sin(t*.014)*10,465,26,18,'#d8a576');ctx.restore();}
   if(mode==='pet'){for(let i=0;i<3;i++){ctx.globalAlpha=.65;ellipse(475+i*22,267-i*20,7,12,'#f4a4ad',-.3);}ctx.globalAlpha=1;}
   if(sleepy){ctx.font='bold 28px sans-serif';ctx.fillStyle='#aa8fbd';ctx.fillText('Z z z',500,255);}
   ctx.restore();
@@ -180,10 +184,11 @@ function draw(t){
 function frame(now){
  if(feedEnd&&now>=feedEnd){feedEnd=0;feedStage='';window.naili?.finishActiveFeed();}
  if(toiletEnd&&now>=toiletEnd){toiletEnd=0;window.naili?.toiletFinished();}
+ if(feedStage==='grab'&&now-feedStageStart>1050&&timeline.name==='grab')timeline.enter('carry',now,undefined,true);
  if(!timeline.locked&&!state.drag&&!feedStage){
   if(walking&&now-motionChanged>180&&timeline.name!=='walk'){if(timeline.enter('walk',now))lastWalkStart=now;}
   else if(!walking&&timeline.name==='walk'&&now-motionChanged>500&&now-lastWalkStart>850){
-   timeline.enter('idle',now,undefined,true);nextAmbient=Math.max(nextAmbient,now+2200);
+   timeline.enter('idle',now,undefined,true);lastManual=Math.max(lastManual,now-2800);
   }
  }
  ambient(now);draw(now);requestAnimationFrame(frame);
