@@ -78,7 +78,7 @@ function tick(){
    filteredTarget=null;cursorHistory=[];
    if(!roamTarget||now>nextRoam)pickRoam(now);
    if(now<roamPause){reportMotion(false);return;}
-   goal=roamTarget;speed=rand(0,1)<0?0:85;
+   goal=roamTarget;speed=85;
    if(Math.hypot(goal.x-x,goal.y-y)<12){roamTarget=null;roamPause=now+rand(2500,6000);reportMotion(false);return;}
  }
  const dx=goal.x-x,dy=goal.y-y,dist=Math.hypot(dx,dy);
