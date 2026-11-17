@@ -66,12 +66,14 @@ function tick(){
  if(!win||win.isDestroyed())return;
  const now=Date.now(),dt=clamp((now-(lastTick||now-16))/1000,.001,.06);lastTick=now;
  if(feeding){
+  if(now-feedStart>45000){const home=feeding.home;feeding=null;const p=clampPosition(home.x,home.y);win.setPosition(p.x,p.y);win.webContents.send('pet:feed:stage','cancel','');reportMotion(false);return;}
+  if(feeding.stage==='grab'){if(now<feeding.grabUntil){reportMotion(false);return;}feeding.stage='return';win.webContents.send('pet:feed:stage','carry',feeding.food);}
   const [fx,fy]=win.getPosition(),goal=feeding.stage==='return'?feeding.home:feeding.target;
   if(feeding.stage==='eat'){reportMotion(false);return;}
   const dx=goal.x-fx,dy=goal.y-fy,dist=Math.hypot(dx,dy);
   if(dist<12){
     win.setPosition(Math.round(goal.x),Math.round(goal.y));reportMotion(false);
-    if(feeding.stage==='chase'){feeding.stage='return';win.webContents.send('pet:feed:stage','grab',feeding.food);}
+    if(feeding.stage==='chase'){feeding.stage='grab';feeding.grabUntil=now+1100;win.webContents.send('pet:feed:stage','grab',feeding.food);}
     else {feeding.stage='eat';win.webContents.send('pet:feed:stage','eat',feeding.food);}
     return;
   }
@@ -208,7 +210,7 @@ ipcMain.handle('pet:settings:set',(_event,patch)=>{
  if('scale'in patch&&(!Number.isInteger(patch.scale)||patch.scale<50||patch.scale>200))throw Error('Invalid scale');
  if('followDelay'in patch&&(!Number.isInteger(patch.followDelay)||patch.followDelay<0||patch.followDelay>1500))throw Error('Invalid followDelay');
  const oldScale=settings.scale;settings={...settings,...patch};save();
- if(patch.activeFeed===false&&feeding){feeding=null;reportMotion(false);}
+ if(patch.activeFeed===false&&feeding){feeding=null;win.webContents.send('pet:feed:stage','cancel','');reportMotion(false);}
  if('activeFeed'in patch){if(settings.activeFeed)startMouseMonitor();else {stopMouseMonitor();if(feedPicker)feedPicker.close();}}
  if('toiletEnabled'in patch||'toiletPosition'in patch){toiletTrip=false;toiletUntil=0;toiletDue=Date.now()+rand(180000,420000);}
  if(oldScale!==settings.scale)resize();
