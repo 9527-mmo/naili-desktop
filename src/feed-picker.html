@@ -1,0 +1,8 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+*{box-sizing:border-box}body{margin:0;padding:14px;background:#fff9f0;color:#674e3e;font:13px -apple-system,"PingFang SC",sans-serif}
+h3{margin:0 0 8px;font-size:16px}p{margin:0 0 10px;color:#98755b;font-size:11px}select,button{border:1px solid #d7b596;border-radius:8px;padding:8px;background:#fff;cursor:pointer}select{width:100%;margin-bottom:10px}.buttons{display:flex;gap:8px}.buttons button{flex:1}#confirm{background:#f4d6b6}
+</style></head><body><h3>🥕 投喂奶栗</h3><p>选好食物，奶栗就会跑来叼走</p><select id="food"><option value="hay">🌾 提摩西草</option><option value="orchard">🌿 果园草</option><option value="alfalfa">🌱 苜蓿草</option><option value="pellet">🥣 兔粮</option><option value="carrot">🥕 胡萝卜</option><option value="leaf">🥬 叶菜</option><option value="apple">🍎 苹果</option><option value="herb">🍃 香草</option></select><div class="buttons"><button id="confirm">投喂</button><button id="cancel">取消</button></div><script>
+document.getElementById('confirm').onclick=()=>window.naili.confirmGlobalFeed(document.getElementById('food').value);
+document.getElementById('cancel').onclick=()=>window.naili.cancelGlobalFeed();
+document.addEventListener('keydown',e=>{if(e.key==='Escape')window.naili.cancelGlobalFeed();});
+</script></body></html>
