@@ -1,8 +1,9 @@
 const {app,BrowserWindow,screen,ipcMain}=require('electron');
 const fs=require('fs'),path=require('path');
 const BASE={width:360,height:390};
-const defaults={follow:false,fullScreen:false,scale:100,followDelay:350};
+const defaults={follow:false,fullScreen:false,scale:100,followDelay:350,toiletEnabled:false,toiletPosition:null};
 let settings={...defaults},win,timer,activity='idle',roamTarget=null,nextRoam=0,roamPause=0,lastTick=0,manualPause=0;
+let toiletDue=Date.now()+240000,toiletTrip=false,toiletUntil=0;
 let cursorHistory=[],filteredTarget=null,moving=false,lastMovementReport=0;
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 const rand=(a,b)=>a+Math.random()*(b-a);
@@ -10,7 +11,8 @@ const settingsFile=()=>path.join(app.getPath('userData'),'settings.json');
 function normalize(raw){
  return {follow:raw?.follow===true,fullScreen:raw?.fullScreen===true,
  scale:clamp(Number.isFinite(raw?.scale)?Math.round(raw.scale):100,50,200),
- followDelay:clamp(Number.isFinite(raw?.followDelay)?Math.round(raw.followDelay):350,0,1500)};
+ followDelay:clamp(Number.isFinite(raw?.followDelay)?Math.round(raw.followDelay):350,0,1500),
+ toiletEnabled:raw?.toiletEnabled===true,toiletPosition:raw?.toiletPosition&&Number.isFinite(raw.toiletPosition.x)&&Number.isFinite(raw.toiletPosition.y)?{x:raw.toiletPosition.x,y:raw.toiletPosition.y}:null};
 }
 function save(){try{fs.writeFileSync(settingsFile(),JSON.stringify(settings,null,2));}catch(e){console.warn('Cannot save pet settings',e);}}
 function allowedDisplays(){return settings.fullScreen?screen.getAllDisplays():[screen.getPrimaryDisplay()];}
@@ -59,10 +61,15 @@ function pickRoam(now){
 function tick(){
  if(!win||win.isDestroyed())return;
  const now=Date.now(),dt=clamp((now-(lastTick||now-16))/1000,.001,.06);lastTick=now;
+ if(activity==='toilet'){if(toiletUntil&&now>toiletUntil){toiletUntil=0;toiletTrip=false;toiletDue=now+rand(300000,720000);}reportMotion(false);return;}
  if(['feed','sleep','pet','play'].includes(activity)||now<manualPause){reportMotion(false);return;}
  const [x,y]=win.getPosition();
  let goal,speed;
- if(settings.follow){
+ if(settings.toiletEnabled&&settings.toiletPosition&&now>=toiletDue&&!toiletTrip){toiletTrip=true;roamTarget=null;}
+ if(toiletTrip&&settings.toiletEnabled&&settings.toiletPosition){
+  goal=clampPosition(settings.toiletPosition.x,settings.toiletPosition.y);speed=110;
+  if(Math.hypot(goal.x-x,goal.y-y)<18){toiletUntil=now+rand(6500,10000);win.webContents.send('pet:toilet:start',toiletUntil-now);reportMotion(false);return;}
+ }else if(settings.follow){
    const p=screen.getCursorScreenPoint();
    cursorHistory.push({x:p.x,y:p.y,t:now});
    cursorHistory=cursorHistory.filter(v=>now-v.t<=settings.followDelay+180);
@@ -82,7 +89,7 @@ function tick(){
    if(Math.hypot(goal.x-x,goal.y-y)<12){roamTarget=null;roamPause=now+rand(2500,6000);reportMotion(false);return;}
  }
  const dx=goal.x-x,dy=goal.y-y,dist=Math.hypot(dx,dy);
- const deadZone=settings.follow?40:5;
+ const deadZone=toiletTrip?5:settings.follow?40:5;
  if(dist<=deadZone){reportMotion(false);return;}
  // Gentle deceleration, while avoiding instant teleportation.
  const step=Math.min(speed*dt,Math.max(0,(dist-deadZone)*.14));
@@ -114,15 +121,23 @@ ipcMain.handle('pet:settings:set',(_event,patch)=>{
  if(!patch||typeof patch!=='object'||Array.isArray(patch))throw Error('Invalid settings');
  const keys=Object.keys(patch);
  if(!keys.length||keys.some(k=>!Object.hasOwn(defaults,k)))throw Error('Unknown setting');
+ if('toiletEnabled'in patch&&typeof patch.toiletEnabled!=='boolean')throw Error('Invalid toiletEnabled');
+ if('toiletPosition'in patch&&patch.toiletPosition!==null&&(!Number.isFinite(patch.toiletPosition?.x)||!Number.isFinite(patch.toiletPosition?.y)))throw Error('Invalid toiletPosition');
  if('follow'in patch&&typeof patch.follow!=='boolean')throw Error('Invalid follow');
  if('fullScreen'in patch&&typeof patch.fullScreen!=='boolean')throw Error('Invalid fullScreen');
  if('scale'in patch&&(!Number.isInteger(patch.scale)||patch.scale<50||patch.scale>200))throw Error('Invalid scale');
  if('followDelay'in patch&&(!Number.isInteger(patch.followDelay)||patch.followDelay<0||patch.followDelay>1500))throw Error('Invalid followDelay');
  const oldScale=settings.scale;settings={...settings,...patch};save();
+ if('toiletEnabled'in patch||'toiletPosition'in patch){toiletTrip=false;toiletUntil=0;toiletDue=Date.now()+rand(180000,420000);}
  if(oldScale!==settings.scale)resize();
  else {resetMovement();if(!settings.fullScreen){const [x,y]=win.getPosition(),p=clampPosition(x,y);win.setPosition(p.x,p.y);}}
  manualPause=Date.now()+1200;
  return {...settings};
+});
+ipcMain.handle('pet:toilet:set-current',()=>{
+ if(!win)throw Error('Pet window unavailable');
+ const [x,y]=win.getPosition();settings.toiletPosition={x,y};save();
+ toiletTrip=false;toiletDue=Date.now()+rand(180000,420000);return {...settings};
 });
 ipcMain.on('pet:drag',(_event,delta)=>{
  if(!win||!Number.isFinite(delta?.x)||!Number.isFinite(delta?.y))return;
@@ -130,5 +145,6 @@ ipcMain.on('pet:drag',(_event,delta)=>{
  const pos=settings.fullScreen?{x:Math.round(nx),y:Math.round(ny)}:clampTo(rectFor(screen.getPrimaryDisplay()),nx,ny);
  win.setPosition(pos.x,pos.y);manualPause=Date.now()+7000;resetMovement();
 });
+ipcMain.on('pet:toilet:finished',()=>{toiletTrip=false;toiletUntil=0;toiletDue=Date.now()+rand(300000,720000);});
 ipcMain.on('pet:activity',(_event,value)=>{if(['idle','feed','sleep','pet','play','curious','walk','run'].includes(value))activity=value;});
 ipcMain.on('pet:quit',()=>app.quit());
