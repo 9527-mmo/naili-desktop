@@ -62,13 +62,14 @@ function tick(){
  if(!win||win.isDestroyed())return;
  const now=Date.now(),dt=clamp((now-(lastTick||now-16))/1000,.001,.06);lastTick=now;
  if(activity==='toilet'){if(toiletUntil&&now>toiletUntil){toiletUntil=0;toiletTrip=false;toiletDue=now+rand(300000,720000);}reportMotion(false);return;}
+ if(toiletUntil&&now<toiletUntil){reportMotion(false);return;}
  if(['feed','sleep','pet','play'].includes(activity)||now<manualPause){reportMotion(false);return;}
  const [x,y]=win.getPosition();
  let goal,speed;
  if(settings.toiletEnabled&&settings.toiletPosition&&now>=toiletDue&&!toiletTrip){toiletTrip=true;roamTarget=null;}
  if(toiletTrip&&settings.toiletEnabled&&settings.toiletPosition){
   goal=clampPosition(settings.toiletPosition.x,settings.toiletPosition.y);speed=110;
-  if(Math.hypot(goal.x-x,goal.y-y)<18){toiletUntil=now+rand(6500,10000);win.webContents.send('pet:toilet:start',toiletUntil-now);reportMotion(false);return;}
+  if(Math.hypot(goal.x-x,goal.y-y)<18){if(!toiletUntil){toiletUntil=now+rand(6500,10000);win.webContents.send('pet:toilet:start',toiletUntil-now);}reportMotion(false);return;}
  }else if(settings.follow){
    const p=screen.getCursorScreenPoint();
    cursorHistory.push({x:p.x,y:p.y,t:now});
