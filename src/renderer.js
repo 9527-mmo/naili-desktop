@@ -1,6 +1,8 @@
 /* Procedural animation prototype: all drawing is original canvas artwork. */
 const canvas=document.getElementById('pet'),ctx=canvas.getContext('2d');
 const status=document.getElementById('status');
+let activeCharacter=null;
+window.CharacterPacks?.load('naili').then(pack=>{activeCharacter=pack;}).catch(()=>{console.info('Character PNGs pending; using Canvas prototype.');});
 const state={mode:'idle',until:0,blink:0,feedCount:0,drag:null,mouse:{x:360,y:350},last:performance.now(),food:0,reduceMotion:window.matchMedia('(prefers-reduced-motion: reduce)').matches};
 function say(s){status.textContent=s;status.classList.add('show');clearTimeout(say.timer);say.timer=setTimeout(()=>status.classList.remove('show'),1800);}
 const foods=['carrot','leaf','apple','hay'];
@@ -16,6 +18,12 @@ function gradient(x,y,r,inner,outer){const g=ctx.createRadialGradient(x-r*.3,y-r
 function ear(x,y,angle,wiggle){ctx.save();ctx.translate(x,y);ctx.rotate(angle+wiggle);ellipse(0,-112,42,132,gradient(0,-110,130,'#e9bb87','#a56b43'));ellipse(0,-116,22,99,'#e6a6a2');ellipse(0,-126,12,77,'#f4c8bb');ctx.restore();}
 function draw(t){
   ctx.clearRect(0,0,720,780);
+  if(activeCharacter){
+    const action=activeCharacter.actions[state.mode]||activeCharacter.actions.idle;
+    const index=Math.floor(t*action.fps/1000)%action.images.length;
+    ctx.drawImage(action.images[index],0,0,720,780);
+    return;
+  }
   const mode=state.mode;
   const bounce=state.reduceMotion?0:(mode==='play'?Math.abs(Math.sin(t*.009))*40:Math.sin(t*.0028)*5);
   const chew=state.reduceMotion?0:(mode==='feed'?Math.sin(t*.025)*7:0);
