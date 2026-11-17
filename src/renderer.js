@@ -6,7 +6,35 @@ window.CharacterPacks?.load('naili').then(pack=>{activeCharacter=pack;}).catch((
 const state={mode:'idle',until:0,blink:0,feedCount:0,drag:null,mouse:{x:360,y:350},last:performance.now(),food:0,reduceMotion:window.matchMedia('(prefers-reduced-motion: reduce)').matches};
 function say(s){status.textContent=s;status.classList.add('show');clearTimeout(say.timer);say.timer=setTimeout(()=>status.classList.remove('show'),1800);}
 const timeline=window.NailiAnimation.create();
-const foods=['carrot','leaf','apple','hay'];
+const foods=['hay','orchard','alfalfa','pellet','carrot','leaf','apple','herb'];
+const foodLabels={hay:'提摩西草',orchard:'果园草',alfalfa:'苜蓿草',pellet:'兔粮',carrot:'胡萝卜',leaf:'叶菜',apple:'苹果',herb:'香草'};
+const foodChoice=document.getElementById('food-choice');
+const toiletToggle=document.getElementById('toilet-toggle');
+const toiletStatus=document.getElementById('toilet-status');
+const setToiletButton=document.getElementById('set-toilet');
+function renderToiletSettings(v){
+ toiletToggle.checked=v.toiletEnabled;
+ toiletStatus.textContent=v.toiletPosition?'厕所位置已保存（可拖动奶栗后重新设置）':'尚未设置厕所位置';
+}
+toiletToggle.addEventListener('change',async()=>{
+ if(toiletToggle.checked&&!toiletStatus.dataset.saved){
+  const current=await window.naili.getSettings();
+  if(!current.toiletPosition){toiletToggle.checked=false;say('请先设置厕所位置');return;}
+ }
+ try{renderToiletSettings(await window.naili.setSettings({toiletEnabled:toiletToggle.checked}));}
+ catch{toiletToggle.checked=!toiletToggle.checked;say('设置失败');}
+});
+setToiletButton.addEventListener('click',async()=>{
+ try{const v=await window.naili.setToiletHere();renderToiletSettings(v);say('厕所位置记住啦！');}
+ catch{say('厕所位置保存失败');}
+});
+window.naili?.getSettings().then(renderToiletSettings).catch(console.warn);
+let toiletEnd=0;
+window.naili?.onToilet(duration=>{
+ const now=performance.now();toiletEnd=now+duration;
+ timeline.enter('toilet',now,duration,true);say('奶栗去上厕所啦');
+});
+
 const settingsPanel=document.getElementById('settings');
 const followToggle=document.getElementById('follow-toggle');
 const followDescription=document.getElementById('follow-description');
@@ -40,11 +68,11 @@ const behavior=window.NailiBehavior.create();
 let lastManual=0;
 function ambient(now){
  behavior.setMoving(walking||Boolean(state.drag),now);
- if(now-lastManual<5000||state.drag||walking)return;
+ if(now-lastManual<5000||state.drag||walking||timeline.name==='toilet')return;
  const decision=behavior.tick(now);
  if(decision.changed&&decision.mode!=='idle')timeline.enter(decision.mode,now);
 }
-function action(mode,duration=2400){lastManual=performance.now();behavior.request(mode,lastManual,duration);if(mode==='feed'){state.food=(state.food+1)%foods.length;state.feedCount++;}state.mode=mode;state.until=performance.now()+duration;timeline.enter(mode,performance.now(),duration);say(({feed:'咔嚓！今天吃'+({carrot:'胡萝卜',leaf:'青菜',apple:'苹果',hay:'干草'})[foods[state.food]]+'！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
+function action(mode,duration=2400){lastManual=performance.now();behavior.request(mode,lastManual,duration);if(mode==='feed'){state.food=Math.max(0,foods.indexOf(foodChoice.value));state.feedCount++;}state.mode=mode;state.until=performance.now()+duration;timeline.enter(mode,performance.now(),duration);say(({feed:'咔嚓！今天吃'+foodLabels[foods[state.food]]+'！',pet:'呼噜～好舒服',sleep:'Zzz…',play:'蹦蹦跳跳！'})[mode]);}
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.action;if(a==='quit')window.naili?.quit();else action(a,a==='sleep'?6500:3000);}));
 canvas.addEventListener('pointerdown',e=>{state.drag={x:e.screenX,y:e.screenY,moved:false};canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointermove',e=>{const d=state.drag;if(d){const x=e.screenX-d.x,y=e.screenY-d.y;if(Math.abs(x)+Math.abs(y)>2){window.naili?.drag(x,y);d.moved=true;}d.x=e.screenX;d.y=e.screenY;}const r=canvas.getBoundingClientRect();state.mouse={x:(e.clientX-r.left)*2,y:(e.clientY-r.top)*2};});
@@ -85,18 +113,26 @@ function draw(t){
   ellipse(238,434,84,87,gradient(238,415,100,'#f6dfbc','#d5a477'));
   ellipse(481,434,84,87,gradient(481,415,100,'#f6dfbc','#d5a477'));
   const eyeY=391;
-  if(sleepy||Math.sin(t*.0015)> .995){ctx.strokeStyle='#563c32';ctx.lineWidth=8;ctx.lineCap='round';for(const x of [295,426]){ctx.beginPath();ctx.moveTo(x-16,eyeY);ctx.quadraticCurveTo(x,eyeY+11,x+16,eyeY);ctx.stroke();}}
+  if(sleepy||(mode==='toilet'&&motion.phase>.25&&motion.phase<.8)||Math.sin(t*.0015)> .995){ctx.strokeStyle='#563c32';ctx.lineWidth=8;ctx.lineCap='round';for(const x of [295,426]){ctx.beginPath();ctx.moveTo(x-16,eyeY);ctx.quadraticCurveTo(x,eyeY+11,x+16,eyeY);ctx.stroke();}}
   else {for(const x of [295,426]){ellipse(x,eyeY,13,19,'#352b29');ellipse(x-4,eyeY-6,4,6,'#fffaf2');}}
   ellipse(360,445,65,49,'#fff4e7');ellipse(339,455,36,27,'#fff8ef');ellipse(382,455,36,27,'#fff8ef');
   ellipse(360,433,13,9,'#ba7f7a');
   ctx.strokeStyle='#845b4e';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(360,441);ctx.lineTo(360,451);ctx.quadraticCurveTo(348,466,339,452);ctx.moveTo(360,451);ctx.quadraticCurveTo(372,466,382,452);ctx.stroke();
+  if(mode==='toilet'){
+    const p=motion.phase;
+    // Settle -> focused posture -> effort -> relieved expression -> cleanup.
+    ellipse(360,660,148,26,'#c6b9a65c');
+    if(p>.20&&p<.78){ctx.font='bold 34px sans-serif';ctx.fillStyle='#8a6d59';ctx.fillText(p<.55?'···':'!',500,310);}
+    if(p>.78){ctx.font='bold 27px sans-serif';ctx.fillStyle='#d38e95';ctx.fillText('♡',494,320);}
+  }
   if(mode==='feed'){
     ctx.save();ctx.translate(405,505+chew);ctx.rotate(-.4);
     const food=foods[state.food];
     if(food==='carrot'){path([[0,0],[29,-15],[24,70],[12,93],[-2,68]],'#f68b32');path([[8,-4],[-10,-32],[15,-19],[23,-45],[29,-12]],'#6ba75c');}
     else if(food==='leaf'){ellipse(12,22,29,57,'#78b96b',-.35);ctx.strokeStyle='#438a43';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(6,70);ctx.lineTo(17,-19);ctx.stroke();}
     else if(food==='apple'){ellipse(13,35,37,36,'#db5551');ellipse(23,28,15,20,'#ef7770');path([[10,0],[16,-27],[22,0]],'#6c8345');ellipse(28,-10,17,8,'#78a85b',-.4);}
-    else {for(let i=0;i<7;i++){ctx.strokeStyle=i%2?'#bca35d':'#d5ba70';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-20+i*9,65);ctx.quadraticCurveTo(12+i*2,17,-10+i*8,-35);ctx.stroke();}}
+    else if(food==='pellet'){ellipse(14,55,55,21,'#aa7654');ellipse(14,47,45,15,'#f5e4c9');for(let i=0;i<11;i++)ellipse(-20+(i%5)*17,38+Math.floor(i/5)*10,7,5,'#977447');}
+    else {for(let i=0;i<7;i++){ctx.strokeStyle=food==='alfalfa'?'#75a55d':food==='herb'?'#5f9950':i%2?'#bca35d':'#d5ba70';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-20+i*9,65);ctx.quadraticCurveTo(12+i*2,17,-10+i*8,-35);ctx.stroke();}}
     ctx.restore();
   }
   if(mode==='pet'){for(let i=0;i<3;i++){ctx.globalAlpha=.65;ellipse(475+i*22,267-i*20,7,12,'#f4a4ad',-.3);}ctx.globalAlpha=1;}
@@ -104,6 +140,7 @@ function draw(t){
   ctx.restore();
 }
 function frame(now){
+ if(toiletEnd&&now>=toiletEnd){toiletEnd=0;window.naili?.toiletFinished();}
  if(!timeline.locked&&!state.drag){
   if(walking&&now-motionChanged>180&&timeline.name!=='walk'){if(timeline.enter('walk',now))lastWalkStart=now;}
   else if(!walking&&timeline.name==='walk'&&now-motionChanged>500&&now-lastWalkStart>850){
