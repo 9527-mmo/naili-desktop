@@ -3,6 +3,8 @@ const canvas=document.getElementById('pet'),ctx=canvas.getContext('2d');
 const status=document.getElementById('status');
 let activeCharacter=null;
 let gen1Motion=null;
+let gen1RoofMotion=null;
+window.NailiRoofMotion?.load().then(pack=>{gen1RoofMotion=pack;console.info('Gen1 roof PNG frames loaded');}).catch(e=>console.info('Gen1 roof Canvas fallback:',e.message));
 window.NailiGen1Motion?.load().then(pack=>{gen1Motion=pack;console.info('Gen 1 motion frames ready:',Object.keys(pack.actions));}).catch(e=>console.info('Gen 1 motion fallback:',e.message));
 window.CharacterPacks?.load('naili').then(pack=>{activeCharacter=pack;}).catch(()=>{console.info('Character PNGs pending; using Canvas prototype.');});
 const state={mode:'idle',until:0,blink:0,feedCount:0,drag:null,mouse:{x:360,y:350},last:performance.now(),food:0,reduceMotion:window.matchMedia('(prefers-reduced-motion: reduce)').matches};
@@ -146,7 +148,7 @@ function draw(t){
   state.mode=motion.name;
   if(state.reportedMode!==motion.name){state.reportedMode=motion.name;window.naili?.activity(motion.name);}
   ctx.clearRect(0,0,720,780);
-  const gen1Action=gen1Motion?.actions[state.mode];
+  const gen1Action=gen1RoofMotion?.actions[state.mode]||gen1Motion?.actions[state.mode];
   if(gen1Action){
     const index=Math.floor((motion.elapsed%gen1Action.duration)/gen1Action.duration*gen1Action.images.length)%gen1Action.images.length;
     ctx.imageSmoothingEnabled=false;
