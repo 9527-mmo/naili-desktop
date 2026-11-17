@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('naili',{
  setSettings:patch=>ipcRenderer.invoke('pet:settings:set',patch),
  setFollow:follow=>ipcRenderer.invoke('pet:settings:set',{follow}),
  activity:name=>ipcRenderer.send('pet:activity',name),
+ confirmGlobalFeed:food=>ipcRenderer.send('pet:feed:global-confirm',food),
+ cancelGlobalFeed:()=>ipcRenderer.send('pet:feed:global-cancel'),
  startActiveFeed:(food,point)=>ipcRenderer.invoke('pet:feed:start',{food,point}),
  finishActiveFeed:()=>ipcRenderer.send('pet:feed:finish'),
  onFeedStage:callback=>{const listener=(_event,stage,food)=>callback(stage,food);ipcRenderer.on('pet:feed:stage',listener);return ()=>ipcRenderer.removeListener('pet:feed:stage',listener);},
