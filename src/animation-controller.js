@@ -8,7 +8,8 @@
  sleep:{duration:9000,loop:false,priority:2},
  play:{duration:1800,loop:false,priority:3},
  pet:{duration:2000,loop:false,priority:3},
- curious:{duration:2300,loop:false,priority:2}
+ curious:{duration:2300,loop:false,priority:2},
+ toilet:{duration:8500,loop:false,priority:4}
  };
  const clamp=x=>Math.min(1,Math.max(0,x));
  const smooth=x=>{x=clamp(x);return x*x*(3-2*x);};
