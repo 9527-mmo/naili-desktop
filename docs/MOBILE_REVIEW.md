@@ -1,3 +1,5 @@
+> **最新工序**：以 [REVIEW_WORKFLOW.md](./REVIEW_WORKFLOW.md) 为准。先上传候选素材到临时审核区、网页审核，失败删除，通过后进入正式素材库。
+
 # 奶栗手机审核台
 
 手机审核网页源码：`docs/index.html`，独立静态 HTML，无需 Electron 或服务器后端。
