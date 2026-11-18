@@ -4,8 +4,8 @@
 <div class="wood"><div class="pet-stage"><canvas id="pet" width="128" height="128" aria-label="奶栗角色素材预览"></canvas></div><div class="roof"><span>✿ 奶栗 NAILI</span><span>⚙ 预览</span></div><div class="screen"><small id="clockLabel">距离下班还有 · 演示</small><div class="timer" id="clock">02:35:48</div><div class="incomes"><div class="income"><small>今日收入</small><b>¥186.42</b></div><div class="income"><small>本月总收入</small><b>¥4,382.65</b></div></div></div></div>
 <section class="section"><div id="assetWarning" role="status" style="border:2px solid #c59a6a;padding:12px;background:#49313a;color:#ffe0ad;font-size:13px;line-height:1.6;margin-bottom:14px">正在检查正式 Gen 1 角色素材……</div><h2>动作预览</h2><div class="actions" id="actions"></div><div class="controls"><button class="control" id="play">⏸ 暂停</button><button class="control" id="speed">1× 速度</button><span class="status" id="status">正在预览：坐下</span></div></section>
 <section class="section"><h2>审核当前动作</h2><div class="review"><div class="review-title" id="reviewTitle">坐下 · 审核意见</div><div class="rating"><button class="rate" data-rate="通过">✓ 通过</button><button class="rate" data-rate="修改">✎ 需修改</button><button class="rate" data-rate="待定">◷ 待定</button></div><textarea id="notes" placeholder="例如：耳朵太短、围脖太厚、脚底没有贴住木框……"></textarea><p class="hint">切换动作时自动保存当前审核记录，仅保存在这台手机的浏览器中。</p></div><button class="control wide" id="export">⬇ 导出审核意见 JSON</button><button class="control wide" id="copy">复制审核意见文本</button></section>
-<p class="footer">说明：此页仅展示仓库中 status=approved 的 Gen 1 正式透明 PNG。缺少正式素材时不会展示简化替代兔子；它不是 Electron 实机录像。收入和倒计时均为演示值。</p></main>
-<script>
+<p class="footer">说明：优先展示 status=approved 的正式 Gen 1 透明 PNG；缺少正式帧时展示从历史角色设定图恢复的静态像素参考。静态参考不代表最终 Gen 1 动画，也不是 Electron 实机录像。收入和倒计时均为演示值。</p></main>
+<script src="./naili-reference-pixel.js"></script><script>
 const ACTIONS=[['roofSit','坐下',6],['roofLie','趴卧',8],['roofStretch','伸懒腰',8],['roofWake','起身',6],['walk','行走示意',8],['sleep','睡觉示意',12]];
 const storeKey='naili-mobile-review-v12';let reviews={};try{reviews=JSON.parse(localStorage.getItem(storeKey)||'{}')||{}}catch{}
 const $=id=>document.getElementById(id),canvas=$('pet'),ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;
@@ -32,7 +32,7 @@ async function loadApproved(){
    if(!Array.isArray(entry.frame_files)||!entry.frame_files.length||entry.frame_files.length>64)continue;
    if(!entry.frame_files.every(p=>typeof p==='string'&&new RegExp('^'+name+'/'+name+'_[0-9]{3}\\.png
  ctx.clearRect(0,0,128,128);
- const frames=approvedFrames[current];if(!frames?.length)return;
+ const frames=approvedFrames[current];if(!frames?.length){const ref=window.NailiReferencePixel;if(ref){const cell=3,ox=16,oy=11;for(let y=0;y<ref.height;y++)for(let x=0;x<ref.width;x++){const v=ref.rows[y][x];if(v==='.')continue;ctx.fillStyle=ref.palette[parseInt(v,12)];ctx.fillRect(ox+x*cell,oy+y*cell,cell,cell);} }return;}
  ctx.drawImage(frames[Math.floor(t*frames.length)%frames.length],0,0,128,128);
  return;
  const frameSize=64;const off=document.createElement('canvas');off.width=off.height=frameSize;const d=off.getContext('2d');d.imageSmoothingEnabled=false;
@@ -56,7 +56,7 @@ function loop(now){const dt=Math.min(100,now-last);last=now;if(!paused)phase+=dt
   $('assetWarning').textContent='✓ 已加载正式 Gen 1 审核素材。未提供的动作会显示空白，避免误认占位图。';
  }catch(e){
   assetReady=false;
-  $('assetWarning').textContent='⚠ 当前仓库尚无已确认的 Gen 1 正式透明逐帧素材。已隐藏旧版简化兔子，避免误导审核。请上传你确认的原始角色图后再制作正式动画。';
+  $('assetWarning').textContent='◷ 已从项目历史找回奶栗早期角色设定图，并恢复其像素轮廓作为静态造型参考。此图并非昨天最终确认的 Gen 1 十二格动画原稿，动作仍不可作为正式审核依据。';
  }
 }
 loadApproved();
